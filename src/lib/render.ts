@@ -196,7 +196,7 @@ export function renderWithPreset(src: HTMLCanvasElement, p: Preset, seed = 7) {
   out.height = sh + top + Math.round(sw * frame.bottom);
   const octx = out.getContext("2d")!;
   // 拍立得相纸自带圆角
-  const rad = Math.round(out.width * 0.025);
+  const rad = Math.max(2, Math.round(out.width * 0.008));
   octx.beginPath();
   octx.roundRect(0, 0, out.width, out.height, rad);
   octx.clip();
@@ -211,17 +211,19 @@ export function renderWithPreset(src: HTMLCanvasElement, p: Preset, seed = 7) {
     octx.fillStyle = g;
     octx.fillRect(0, out.height - bot * 0.35, out.width, bot * 0.35);
   }
-  // 压纹：细长纸纤维（中性灰，不泛黄），有明暗两面形成浮雕感
+  // 压纹：参考实拍相纸的细密斜向菱格压纹
   const unit = Math.max(1, out.width / 400);
-  for (let n = 0; n < (out.width * out.height) / (140 * unit); n++) {
-    const x = pr() * out.width, y = pr() * out.height, l = (4 + pr() * 10) * unit, a = pr() * Math.PI;
-    const ex = x + Math.cos(a) * l, ey = y + Math.sin(a) * l;
-    const mx = (x + ex) / 2 + (pr() - 0.5) * 2 * unit, my = (y + ey) / 2 + (pr() - 0.5) * 2 * unit;
-    octx.lineWidth = 0.6 * unit;
-    octx.strokeStyle = "rgba(60,60,55,0.07)";
-    octx.beginPath(); octx.moveTo(x, y); octx.quadraticCurveTo(mx, my, ex, ey); octx.stroke();
-    octx.strokeStyle = "rgba(255,255,255,0.12)";
-    octx.beginPath(); octx.moveTo(x, y + unit * 0.7); octx.quadraticCurveTo(mx, my + unit * 0.7, ex, ey + unit * 0.7); octx.stroke();
+  const gap = 2.6 * unit, D = out.width + out.height;
+  octx.lineWidth = 0.55 * unit;
+  for (const dir of [1, -1]) {
+    for (let k = -out.height; k < D; k += gap) {
+      const x0 = dir > 0 ? k : out.width - k;
+      const jit = (pr() - 0.5) * 0.4 * unit;
+      octx.strokeStyle = "rgba(70,75,80,0.075)";
+      octx.beginPath(); octx.moveTo(x0 + jit, 0); octx.lineTo(x0 + jit + dir * out.height, out.height); octx.stroke();
+      octx.strokeStyle = "rgba(255,255,255,0.14)";
+      octx.beginPath(); octx.moveTo(x0 + jit + 0.8 * unit, 0); octx.lineTo(x0 + jit + 0.8 * unit + dir * out.height, out.height); octx.stroke();
+    }
   }
   const yel = octx.createRadialGradient(out.width / 2, out.height / 2, Math.min(out.width, out.height) * 0.35, out.width / 2, out.height / 2, Math.max(out.width, out.height) * 0.75);
   yel.addColorStop(0, "rgba(150,140,120,0)"); yel.addColorStop(1, "rgba(150,140,120,0.07)");
