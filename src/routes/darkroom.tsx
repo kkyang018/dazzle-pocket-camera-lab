@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ChevronLeft, Inbox, Zap, ZapOff } from "lucide-react";
+import { ChevronLeft, Inbox, SplitSquareHorizontal, Zap, ZapOff } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AiMark, ApproxTag, ProMark } from "@/components/app/marks";
 import { ExposureDial, Ruler } from "@/components/darkroom/controls";
@@ -8,6 +8,7 @@ import { useApp } from "@/lib/app-state";
 import { flashStrength, getCamera, type FlashMode, type Preset } from "@/lib/cameras";
 import { renderWithPreset } from "@/lib/render";
 import { cn } from "@/lib/utils";
+import { playEject } from "@/lib/sound";
 
 const FLASH_OPTIONS: { id: FlashMode; label: string }[] = [
   { id: "off", label: "关" },
@@ -59,6 +60,20 @@ function DarkroomPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const trayRef = useRef<HTMLDivElement>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const [box, setBox] = useState({ w: 0, h: 0 });
+  const [dim, setDim] = useState({ w: 0, h: 0 });
+  const [zoom, setZoom] = useState<{ src: string; big: boolean } | null>(null);
+  const [btnStyle, setBtnStyle] = useState<"A" | "B" | "C">("A");
+  const [slide, setSlide] = useState(0);
+  const slideRef = useRef<{ x: number; w: number } | null>(null);
+  const moved = useRef(false);
+  useEffect(() => {
+    const el = paperRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => setBox({ w: e!.contentRect.width, h: e!.contentRect.height }));
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
   const dragStart = useRef<{ x: number; y: number; cx: number; cy: number; w: number; h: number; mx: number; my: number } | null>(null);
 
   const stats = base?.stats;
@@ -93,6 +108,7 @@ function DarkroomPage() {
       if (!c) return;
       c.width = out.width;
       c.height = out.height;
+      setDim((d) => (d.w === out.width && d.h === out.height ? d : { w: out.width, h: out.height }));
       c.getContext("2d")!.drawImage(out, 0, 0);
     });
     return () => cancelAnimationFrame(f);
@@ -120,6 +136,7 @@ function DarkroomPage() {
     const total = quietMode ? 50 : DEV_MS[camera.category];
     if (camera.category === "ccd" && !quietMode) timers.current.push(setTimeout(() => setStage("play"), 900));
     timers.current.push(setTimeout(finish, total));
+    if (camera.category === "instant") playEject();
   };
   const goResult = () => {
     setLook(preset);
@@ -128,7 +145,7 @@ function DarkroomPage() {
 
   const onPaperDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (phase === "developing") return;
-    if (phase === "idle" && !isInstant) return;
+    moved.current = false;
     e.currentTarget.setPointerCapture(e.pointerId);
     const r = e.currentTarget.getBoundingClientRect();
     dragStart.current = { x: e.clientX, y: e.clientY, cx: crop.x, cy: crop.y, w: r.width, h: r.height, mx: r.left + r.width / 2, my: r.top + r.height / 2 };
@@ -137,6 +154,9 @@ function DarkroomPage() {
     const s = dragStart.current;
     if (!s) return;
     const dx = e.clientX - s.x, dy = e.clientY - s.y;
+    if (Math.abs(dx) + Math.abs(dy) > 6) moved.current = true;
+    if (!moved.current) return;
+    if (phase === "idle" && !isInstant) return;
     if (phase === "done") {
       setDrag({ dx, dy, mode: "drag" });
       const t = trayRef.current?.getBoundingClientRect();
@@ -149,6 +169,11 @@ function DarkroomPage() {
   const onPaperUp = () => {
     const s = dragStart.current;
     dragStart.current = null;
+    if (s && !moved.current && canvasRef.current) {
+      setDrag(null);
+      setZoom({ src: canvasRef.current.toDataURL("image/jpeg", 0.92), big: false });
+      return;
+    }
     if (phase !== "done" || !drag || !s) return;
     if (overTray && trayRef.current) {
       const t = trayRef.current.getBoundingClientRect();
@@ -190,7 +215,68 @@ function DarkroomPage() {
         : "anim-dev-emerge"
     : "";
 
-  const status = phase === "done" ? "已显影 · 拖到成品台" : developing ? "显影中 · 点照片跳过" : isInstant ? "待显影 · 拖动照片裁剪" : "待显影";
+  const status = phase === "done" ? "已显影" : developing ? "显影中" : "待显影";
+  const slotH = isInstant ? 14 : 0;
+  const pad = isInstant ? 0 : 16;
+  const fit = dim.w && box.w ? Math.min((box.w - pad) / dim.w, (box.h - pad - slotH - 4) / dim.h) : 0;
+  const cssSize = fit > 0 ? { width: Math.floor(dim.w * fit), height: Math.floor(dim.h * fit) } : undefined;
+
+  const label = phase === "done" ? "重新显影" : developing ? "显影中…" : "显影";
+  const led = <span className={cn("size-1.5 shrink-0 rounded-full", developing ? "lamp-on bg-destructive" : phase === "done" ? "bg-muted-foreground/40" : "bg-primary shadow-[0_0_6px_1px_var(--primary)]")} />;
+  const onSlideDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (developing) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    slideRef.current = { x: e.clientX, w: e.currentTarget.getBoundingClientRect().width - 44 };
+  };
+  const onSlideMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const r = slideRef.current;
+    if (r) setSlide(Math.min(1, Math.max(0, (e.clientX - r.x) / r.w)));
+  };
+  const onSlideUp = () => {
+    if (slideRef.current && slide > 0.85) develop();
+    slideRef.current = null;
+    setSlide(0);
+  };
+  const devButton =
+    btnStyle === "A" ? (
+      <div className="flex-1 rounded-2xl bg-background p-1 shadow-[inset_0_2px_4px_rgb(0_0_0/0.8),0_1px_0_var(--hairline)]">
+        <button type="button" onClick={develop} disabled={developing}
+          className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-hairline bg-gradient-to-b from-surface-raised to-surface font-serif text-[15px] tracking-[0.3em] text-primary shadow-[inset_0_1px_0_rgb(255_255_255/0.08),0_2px_3px_rgb(0_0_0/0.6)] transition-transform active:translate-y-[1.5px] active:shadow-[inset_0_2px_4px_rgb(0_0_0/0.6)] disabled:opacity-70">
+          {led}<span className="glow-text">{label}</span>
+        </button>
+      </div>
+    ) : btnStyle === "B" ? (
+      <div onPointerDown={onSlideDown} onPointerMove={onSlideMove} onPointerUp={onSlideUp} onPointerCancel={onSlideUp}
+        className="relative h-11 flex-1 touch-none overflow-hidden rounded-full bg-background shadow-[inset_0_2px_5px_rgb(0_0_0/0.85)]">
+        <div className="absolute inset-y-0 left-0 bg-primary/20" style={{ width: `calc(${slide * 100}% + 22px)` }} />
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-[6px] pl-10">
+          {Array.from({ length: 14 }, (_, i) => <span key={i} className="h-3 w-px bg-foreground/20" />)}
+        </div>
+        <span className="pointer-events-none absolute inset-0 flex items-center justify-center pl-8 font-mono text-[11px] tracking-widest text-muted-foreground">
+          {developing ? "显影中…" : phase === "done" ? "拉闸重新显影 ›››" : "拉闸显影 ›››"}
+        </span>
+        <div className="absolute top-1 left-1 flex size-9 items-center justify-center rounded-full border border-hairline bg-gradient-to-b from-surface-raised to-surface shadow-[0_2px_4px_rgb(0_0_0/0.7)]"
+          style={{ left: `calc(4px + ${slide} * (100% - 44px))` }}>
+          {led}
+        </div>
+      </div>
+    ) : (
+      <button type="button" onClick={develop} disabled={developing}
+        className="flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-primary/50 font-serif text-[15px] tracking-[0.3em] text-primary active:bg-primary/10 disabled:opacity-70">
+        {led}{label}
+      </button>
+    );
+  const devRow = (
+    <div className="relative z-10 flex shrink-0 items-center gap-2 py-2">
+      {devButton}
+      <div ref={trayRef} onClick={phase === "done" ? goResult : () => showHint("先显影，再把照片拖进成品台")} role="button" aria-label="成品台"
+        className={cn("flex size-11 shrink-0 flex-col items-center justify-center rounded-xl border transition-all",
+          overTray ? "scale-125 border-primary bg-primary/15 text-primary" : phase === "done" ? "anim-tray border-primary/70 bg-primary/10 text-primary" : "border-hairline bg-background/40 text-muted-foreground")}>
+        <Inbox className="size-4" />
+        <span className="text-[8px]">成品台</span>
+      </div>
+    </div>
+  );
 
   return (
     <main className="theme-darkroom relative flex h-[calc(100dvh-4.5rem-env(safe-area-inset-bottom))] select-none flex-col overflow-hidden px-5 pt-[max(env(safe-area-inset-top),0.5rem)]">
@@ -202,7 +288,12 @@ function DarkroomPage() {
           <ChevronLeft className="size-4" />
           换相机
         </Link>
-        <h1 className="font-serif text-base font-bold">暗房</h1>
+        <h1 className="flex items-center gap-1.5 font-serif text-base font-bold" title={status}>
+          <span aria-label={status} className={cn("size-2 rounded-full transition-all duration-700",
+            developing ? "lamp-on bg-destructive" : phase === "done" ? "bg-destructive/25" : "bg-destructive/50 shadow-[0_0_6px_1px_var(--destructive)]")} />
+          暗房
+          <span className="font-mono text-[10px] font-normal text-muted-foreground">{camera.name}</span>
+        </h1>
         <div role="radiogroup" aria-label="闪光灯" className="flex items-center gap-0.5 rounded-full bg-surface p-0.5">
           {strength > 0 ? <Zap className="ml-1 size-3.5 text-primary" /> : <ZapOff className="ml-1 size-3.5 text-muted-foreground" />}
           {FLASH_OPTIONS.map((o) => (
@@ -214,17 +305,20 @@ function DarkroomPage() {
         </div>
       </header>
 
-      {/* 显影状态 */}
-      <div className="relative z-10 mt-2 flex shrink-0 items-center justify-between rounded-full border border-hairline bg-surface/70 px-3 py-1.5 font-mono text-[11px]">
-        <span className="flex items-center gap-1.5">
-          <span className={cn("size-1.5 rounded-full", developing ? "animate-[blink_0.6s_steps(1)_infinite] bg-destructive" : phase === "done" ? "bg-primary" : "bg-muted-foreground")} />
-          {camera.name} · {status}
-        </span>
-        {original ? <span className="rounded-full bg-foreground px-2 py-0.5 text-[10px] text-background">原图</span> : <ApproxTag />}
-      </div>
-
       {/* 相纸 */}
-      <section ref={paperRef} className="relative z-10 mt-2 flex min-h-0 flex-1 items-center justify-center overflow-visible" onClick={developing ? finish : undefined}>
+      <section ref={paperRef} className={cn("relative mt-2 flex min-h-0 flex-1 justify-center", drag ? "z-50" : "z-10", isInstant ? "items-start overflow-hidden" : "items-center overflow-visible")} style={isInstant ? { paddingTop: slotH } : undefined} onClick={developing ? finish : undefined}>
+        {isInstant && (
+          <div aria-hidden className="absolute inset-x-6 top-0 z-30 h-[14px] rounded-b-md bg-gradient-to-b from-background to-surface shadow-[0_6px_10px_-4px_rgb(0_0_0/0.8)]">
+            <div className="mx-auto mt-[5px] h-[3px] w-[82%] rounded-full bg-background shadow-[inset_0_1px_2px_rgb(0_0_0/0.9)]" />
+          </div>
+        )}
+        <ApproxTag className="absolute top-1 right-1 z-30" />
+      <div role="radiogroup" aria-label="显影按键样式" onClick={(e) => e.stopPropagation()} className="absolute top-1 left-1 z-30 flex gap-0.5 rounded-full bg-background/70 p-0.5 font-mono text-[9px]">
+        {(["A", "B", "C"] as const).map((k) => (
+          <button key={k} type="button" role="radio" aria-checked={btnStyle === k} onClick={() => setBtnStyle(k)}
+            className={cn("rounded-full px-1.5 py-0.5", btnStyle === k ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>{k}</button>
+        ))}
+      </div>
         <div
           key={devKey}
           onPointerDown={onPaperDown}
@@ -234,16 +328,15 @@ function DarkroomPage() {
           style={dragStyle}
           className={cn(
             drag ? "z-40" : "z-10",
-            "relative flex h-full max-w-full touch-none items-center justify-center",
+            "relative flex touch-none items-center justify-center",
             !isInstant && "bg-surface-raised p-2 shadow-[0_18px_40px_-14px_rgb(0_0_0/0.8)]",
             isInstant && "drop-shadow-[0_16px_24px_rgb(0_0_0/0.6)]",
-            !isInstant && "h-auto max-h-full",
-            developing && cat === "instant" && "anim-dev-slide",
+            developing && cat === "instant" && "anim-dev-eject",
             phase === "done" && "cursor-grab",
             phase === "idle" && isInstant && "cursor-move",
           )}
         >
-          <canvas ref={canvasRef} className={cn("block max-h-full max-w-full object-contain", animClass)} />
+          <canvas ref={canvasRef} style={cssSize} className={cn("block", animClass)} />
         </div>
         {developing && cat === "ccd" && stage === "store" && (
           <div className="absolute inset-0 z-20 flex items-center justify-center">
@@ -261,9 +354,10 @@ function DarkroomPage() {
           onClick={(e) => e.stopPropagation()}
           aria-pressed={original}
           onContextMenu={(e) => e.preventDefault()}
-          className={cn("touch-hold absolute bottom-1 left-0 z-30 rounded-full border px-3 py-1 font-mono text-[11px] select-none backdrop-blur", original ? "border-foreground bg-foreground text-background" : "border-foreground/30 bg-background/60")}
+          aria-label="按住对比原片"
+          className={cn("touch-hold absolute right-1 bottom-1 z-30 flex size-8 items-center justify-center rounded-full border select-none backdrop-blur", original ? "border-foreground bg-foreground text-background" : "border-foreground/30 bg-background/50")}
         >
-          按住看原片
+          <SplitSquareHorizontal className="size-4" />
         </button>
       </section>
 
@@ -313,25 +407,16 @@ function DarkroomPage() {
             ))}
           </div>
         )}
+        {btnStyle === "C" && <div className="-mx-3 -mb-3 mt-3 rounded-b-2xl border-t border-hairline bg-background/40 px-3">{devRow}</div>}
       </section>
 
-      <div className="relative z-10 flex shrink-0 items-center gap-2 py-2">
-        <button type="button" onClick={develop} disabled={developing}
-          className="h-11 flex-1 rounded-full bg-primary text-[15px] font-medium text-primary-foreground shadow-glow-amber active:scale-[0.98] disabled:opacity-60">
-          {phase === "done" ? "重新显影" : developing ? "显影中…" : "显影"}
-        </button>
-        {phase === "done" && (
-          <button type="button" onClick={goResult} className="h-11 flex-1 rounded-full border-2 border-foreground text-[14px] font-medium">
-            做成成品
-          </button>
-        )}
-        <div ref={trayRef} onClick={phase === "done" ? goResult : () => showHint("先显影，再把照片拖到这里")}
-          className={cn("flex size-11 shrink-0 flex-col items-center justify-center rounded-xl border-2 border-dashed transition-all",
-            overTray ? "scale-125 border-primary text-primary" : phase === "done" ? "border-primary/70 text-primary" : "border-foreground/25 text-muted-foreground")}>
-          <Inbox className="size-4" />
-          <span className="text-[8px]">成品台</span>
+      {btnStyle !== "C" && devRow}
+      {zoom && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-auto bg-background/95" onClick={() => setZoom(null)}>
+          <img src={zoom.src} alt="照片细节" onClick={(e) => { e.stopPropagation(); setZoom({ ...zoom, big: !zoom.big }); }}
+            className={cn("transition-transform", zoom.big ? "max-w-none w-[220%]" : "max-h-full max-w-full object-contain")} />
         </div>
-      </div>
+      )}
     </main>
   );
 }

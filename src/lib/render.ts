@@ -115,7 +115,7 @@ export function renderWithPreset(src: HTMLCanvasElement, p: Preset, seed = 7) {
   const fl = p.flash ?? 0;
   const tone = p.flashTone ?? "neutral";
   const fT = tone === "cool" ? [0.92, 1.0, 1.1] : tone === "warm" ? [1.1, 1.0, 0.86] : [1, 1, 1];
-  const fBoost = tone === "soft" ? 0.7 : 0.85;
+  const fBoost = tone === "soft" ? 0.75 : 0.95;
   const fcy = cy * 0.85;
   const fCt = tone === "soft" ? 1.22 : 1.32;
 
@@ -126,19 +126,17 @@ export function renderWithPreset(src: HTMLCanvasElement, p: Preset, seed = 7) {
       let g = (d[i + 1]! / 255) * ev + tG;
       let b = (d[i + 2]! / 255) * ev + tB;
       if (fl > 0) {
-        // 直闪：环境光被压暗，闪光按距离平方衰减照亮前景，暗部被补亮、质感变平
+        // 硬直闪：亮面陡峭提亮、暗部/背景压实，按原亮度拉开反差
         const fdx = (x - cx) / cx, fdy = (y - fcy) / cy;
-        const fall = 1 / (1 + 3.4 * (fdx * fdx * 0.8 + fdy * fdy));
-        const amb = 1 - 0.62 * fl;
-        const L = 0.299 * r + 0.587 * g + 0.114 * b;
-        const refl = 1 / Math.pow(Math.max(L, 0.12), 0.3); // 轻度补暗部，保留硬阴影
-        const k = fl * fBoost * fall;
-        r = r * amb + k * Math.min(1.2, r * refl + 0.05) * fT[0]!;
-        g = g * amb + k * Math.min(1.2, g * refl + 0.05) * fT[1]!;
-        b = b * amb + k * Math.min(1.2, b * refl + 0.05) * fT[2]!;
-        r = (r - 0.5) * fCt + 0.5;
-        g = (g - 0.5) * fCt + 0.5;
-        b = (b - 0.5) * fCt + 0.5;
+        const fall = 1 / (1 + 2.6 * (fdx * fdx * 0.8 + fdy * fdy));
+        const L = Math.min(1, Math.max(0, 0.299 * r + 0.587 * g + 0.114 * b));
+        const tonal = L * L * (3 - 2 * L); // 越亮受光越多
+        const gain = 1 + fl * fBoost * fall * (0.35 + 1.5 * tonal);
+        const crush = 1 - fl * (1 - fall) * 0.55 - fl * (1 - tonal) * 0.25;
+        const m = gain * crush;
+        r = r * m * fT[0]!; g = g * m * fT[1]!; b = b * m * fT[2]!;
+        const k2 = 1 + (fCt - 1) * fl * 1.4;
+        r = (r - 0.42) * k2 + 0.42; g = (g - 0.42) * k2 + 0.42; b = (b - 0.42) * k2 + 0.42;
       }
       r = (r - 0.5) * ct + 0.5;
       g = (g - 0.5) * ct + 0.5;
@@ -214,6 +212,16 @@ export function renderWithPreset(src: HTMLCanvasElement, p: Preset, seed = 7) {
     octx.fillStyle = g;
     octx.fillRect(0, out.height - bot * 0.35, out.width, bot * 0.35);
   }
+  if (bot > side * 1.5) {
+    for (const f of [0.35, 0.62]) {
+      const yy = out.height - bot * f;
+      octx.fillStyle = "rgba(0,0,0,0.06)"; octx.fillRect(side, yy, out.width - side * 2, Math.max(1, sw / 500));
+      octx.fillStyle = "rgba(255,255,255,0.5)"; octx.fillRect(side, yy + Math.max(1, sw / 500), out.width - side * 2, Math.max(1, sw / 600));
+    }
+  }
+  const sheen = octx.createLinearGradient(0, 0, out.width, out.height);
+  sheen.addColorStop(0, "rgba(255,255,255,0.18)"); sheen.addColorStop(0.5, "rgba(255,255,255,0)"); sheen.addColorStop(1, "rgba(120,100,70,0.08)");
+  octx.fillStyle = sheen; octx.fillRect(0, 0, out.width, out.height);
   octx.drawImage(c, side, top);
   octx.strokeStyle = "rgba(0,0,0,0.28)";
   octx.lineWidth = Math.max(1, sw / 400);

@@ -102,7 +102,7 @@ function CamerasPage() {
         photo={photo}
         base={base?.canvas ?? null}
         preset={camera?.preset ?? null}
-        className="mt-2 min-h-0 flex-1 max-h-[380px]"
+        className="mt-2 min-h-0 flex-1 max-h-[460px]"
       />
 
       <div role="tablist" aria-label="相机分类" className="mt-3 shrink-0 flex gap-5 border-b border-hairline">

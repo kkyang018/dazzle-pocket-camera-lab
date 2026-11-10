@@ -22,7 +22,7 @@ export function CameraCard({
   const press = useLongPress({ onLongPress: onTogglePin });
 
   return (
-    <div className="relative w-[92px] shrink-0 snap-start">
+    <div className="relative w-[78px] shrink-0 snap-start">
       <button
         type="button"
         {...press}
@@ -30,7 +30,7 @@ export function CameraCard({
         aria-pressed={selected}
         aria-label={`${camera.name}${camera.pro ? "，Pro" : ""}${recommended ? "，AI推荐" : ""}${pinned ? "，已置顶" : ""}`}
         className={cn(
-          "touch-hold flex w-full flex-col items-center rounded-2xl border px-1.5 pt-6 pb-2.5 transition-all active:scale-95",
+          "touch-hold flex w-full flex-col items-center rounded-2xl border px-1 pt-5 pb-2 transition-all active:scale-95",
           selected
             ? "border-primary bg-surface-raised shadow-glow-amber"
             : "border-hairline bg-surface",
@@ -39,16 +39,16 @@ export function CameraCard({
         <img
           src={camera.icon}
           alt=""
-          width={64}
-          height={64}
+          width={48}
+          height={48}
           draggable={false}
           loading="lazy"
           className={cn(
-            "pointer-events-none size-16 object-contain drop-shadow-[0_6px_10px_rgb(0_0_0/0.55)] transition-transform",
+            "pointer-events-none size-12 object-contain drop-shadow-[0_6px_10px_rgb(0_0_0/0.55)] transition-transform",
             selected && "-translate-y-0.5 scale-105",
           )}
         />
-        <span className="mt-1.5 flex max-w-full items-center gap-0.5 text-[12px] leading-tight">
+        <span className="mt-1.5 flex max-w-full items-center gap-0.5 text-[11px] leading-tight">
           {pinned && <Pin className="size-2.5 shrink-0 fill-current text-primary" strokeWidth={2} />}
           <span className="truncate">{camera.name}</span>
         </span>
