@@ -111,6 +111,12 @@ export function renderWithPreset(src: HTMLCanvasElement, p: Preset, seed = 7) {
   const rand = mulberry32(seed);
   const grain = p.grain;
   const lift = fade * 0.35, keep = 1 - fade * 0.5;
+  // 直闪：中心提亮、边缘快速衰减、反差更硬
+  const fl = p.flash ?? 0;
+  const tone = p.flashTone ?? "neutral";
+  const fT = tone === "cool" ? [0.92, 1.0, 1.1] : tone === "warm" ? [1.1, 1.0, 0.86] : [1, 1, 1];
+  const fBoost = tone === "soft" ? 0.3 : 0.45;
+  const fCt = tone === "soft" ? 1.02 : 1.14;
 
   for (let y = 0, i = 0; y < sh; y++) {
     const dy = y - cy;
@@ -118,6 +124,16 @@ export function renderWithPreset(src: HTMLCanvasElement, p: Preset, seed = 7) {
       let r = (d[i]! / 255) * ev + tR;
       let g = (d[i + 1]! / 255) * ev + tG;
       let b = (d[i + 2]! / 255) * ev + tB;
+      if (fl > 0) {
+        const fdx = x - cx;
+        const fd = (fdx * fdx + dy * dy) * inv;
+        const k = fl * Math.max(0, 1 - fd * 1.4);
+        const gain = 1 + fBoost * k;
+        const fall = 1 - fl * 0.35 * fd;
+        r = ((r * gain * fT[0]! - 0.5) * fCt + 0.5) * fall;
+        g = ((g * gain * fT[1]! - 0.5) * fCt + 0.5) * fall;
+        b = ((b * gain * fT[2]! - 0.5) * fCt + 0.5) * fall;
+      }
       r = (r - 0.5) * ct + 0.5;
       g = (g - 0.5) * ct + 0.5;
       b = (b - 0.5) * ct + 0.5;
@@ -161,6 +177,18 @@ export function renderWithPreset(src: HTMLCanvasElement, p: Preset, seed = 7) {
     grad.addColorStop(1, `rgba(${color},0)`);
     ctx.globalCompositeOperation = "screen";
     ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, sw, sh);
+    ctx.globalCompositeOperation = "source-over";
+  }
+
+  if (fl > 0) {
+    // 高光泛光
+    const glow = ctx.createRadialGradient(cx, cy * 0.9, 0, cx, cy, Math.max(sw, sh) * 0.45);
+    const col = tone === "warm" ? "255,220,170" : tone === "cool" ? "225,238,255" : "255,255,255";
+    glow.addColorStop(0, `rgba(${col},${0.16 * fl})`);
+    glow.addColorStop(1, `rgba(${col},0)`);
+    ctx.globalCompositeOperation = "screen";
+    ctx.fillStyle = glow;
     ctx.fillRect(0, 0, sw, sh);
     ctx.globalCompositeOperation = "source-over";
   }

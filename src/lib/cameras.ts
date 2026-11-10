@@ -23,6 +23,15 @@ export const CATEGORIES: { id: CameraCategory; label: string }[] = [
 ];
 
 type RGB = [number, number, number];
+export type FlashTone = "cool" | "warm" | "neutral" | "soft";
+export type FlashMode = "off" | "auto" | "on";
+
+/** 自动档：画面偏暗时才打闪 */
+export function flashStrength(mode: FlashMode, lum: number) {
+  if (mode === "on") return 1;
+  if (mode === "off") return 0;
+  return lum < 0.42 ? 1 : 0;
+}
 
 /** 相机效果预设：色偏 / 对比度 / 饱和度 / 颗粒 / 暗角等组合 */
 export type Preset = {
@@ -39,6 +48,9 @@ export type Preset = {
   mono?: boolean;
   leak?: { x: number; y: number; color: string; strength: number };
   dateStamp?: boolean;
+  /** 闪光强度 0…1 */
+  flash?: number;
+  flashTone?: FlashTone;
   frame?: { kind: "square" | "mini" | "wide"; color: string };
 };
 
@@ -58,6 +70,10 @@ export type Camera = {
   category: CameraCategory;
   icon: string;
   pro: boolean;
+  /** 网红滤镜一句话说明 */
+  tagline: string;
+  /** 闪光灯色调：冷白直闪 / 暖金直闪 / 中性 / 柔光 */
+  flashTone: FlashTone;
   /** AI 推荐用：这台相机最适合的画面特征 */
   likes: Partial<PhotoStats>;
   preset: Preset;
@@ -78,85 +94,85 @@ const base: Preset = {
 const p = (o: Partial<Preset>): Preset => ({ ...base, ...o });
 
 export const CAMERAS: Camera[] = [
-  // 胶片
+  // 胶片 —— 参考网上最火的胶卷色调
   {
-    id: "gold200", name: "金秋 200", category: "film", icon: filmGold, pro: false,
+    id: "gold200", name: "Gold 200", tagline: "柯达暖金 · 奶油黄", category: "film", icon: filmGold, pro: false, flashTone: "warm",
     likes: { warmth: 0.75, lum: 0.6 },
-    preset: p({ exposure: 0.05, contrast: 1.08, saturation: 1.12, temperature: 0.45, fade: 0.08, grain: 0.07, vignette: 0.28, shadows: [0.02, 0.0, -0.03], highlights: [0.05, 0.02, -0.04],
-      leak: { x: 1, y: 0.1, color: "255,120,40", strength: 0.22 } }),
+    preset: p({ exposure: 0.08, contrast: 1.06, saturation: 1.15, temperature: 0.55, tint: 0.04, fade: 0.1, grain: 0.08, vignette: 0.25, shadows: [0.03, 0.01, -0.04], highlights: [0.07, 0.04, -0.05],
+      leak: { x: 1, y: 0.05, color: "255,130,40", strength: 0.2 } }),
   },
   {
-    id: "green400", name: "青绿 400", category: "film", icon: filmGreen, pro: false,
+    id: "superia400", name: "Superia 400", tagline: "富士青绿 · 日系通透", category: "film", icon: filmGreen, pro: false, flashTone: "neutral",
     likes: { green: 0.8, warmth: 0.45 },
-    preset: p({ contrast: 1.05, saturation: 0.95, temperature: -0.15, tint: 0.35, fade: 0.12, grain: 0.08, vignette: 0.22, shadows: [-0.02, 0.03, 0.02], highlights: [0.02, 0.02, -0.02] }),
+    preset: p({ exposure: 0.05, contrast: 1.04, saturation: 0.95, temperature: -0.2, tint: 0.4, fade: 0.14, grain: 0.08, vignette: 0.2, shadows: [-0.03, 0.04, 0.04], highlights: [0.02, 0.03, -0.01] }),
   },
   {
-    id: "portra160", name: "暖肤 160", category: "film", icon: filmPortra, pro: true,
+    id: "portra160", name: "Portra 160", tagline: "奶油肤色 · 柔和低反差", category: "film", icon: filmPortra, pro: true, flashTone: "warm",
     likes: { skin: 0.8, sat: 0.4 },
-    preset: p({ exposure: 0.12, contrast: 0.92, saturation: 0.9, temperature: 0.25, tint: -0.1, fade: 0.1, grain: 0.05, vignette: 0.15, shadows: [0.01, 0.0, 0.02], highlights: [0.04, 0.02, 0.0] }),
+    preset: p({ exposure: 0.15, contrast: 0.9, saturation: 0.88, temperature: 0.3, tint: -0.08, fade: 0.12, grain: 0.05, vignette: 0.14, shadows: [0.02, 0.0, 0.02], highlights: [0.06, 0.03, 0.0] }),
   },
   {
-    id: "silverhp", name: "银盐 HP", category: "film", icon: filmBw, pro: true,
+    id: "hp5", name: "HP5 黑白", tagline: "街头黑白 · 粗颗粒", category: "film", icon: filmBw, pro: true, flashTone: "neutral",
     likes: { contrast: 0.8, sat: 0.2 },
-    preset: p({ contrast: 1.28, mono: true, fade: 0.05, grain: 0.13, vignette: 0.35, shadows: [0.0, 0.0, 0.01], highlights: [0.02, 0.01, 0.0] }),
+    preset: p({ contrast: 1.32, mono: true, fade: 0.06, grain: 0.15, vignette: 0.38, highlights: [0.02, 0.01, 0.0] }),
   },
   {
-    id: "snap", name: "随手拍", category: "film", icon: filmDisposable, pro: false,
+    id: "cpm35", name: "CPM35", tagline: "一次性相机 · 暖金日期戳", category: "film", icon: filmDisposable, pro: false, flashTone: "warm",
     likes: { lum: 0.32, sat: 0.5 },
-    preset: p({ exposure: 0.25, contrast: 1.2, saturation: 1.2, temperature: 0.1, tint: 0.08, grain: 0.11, vignette: 0.45, shadows: [0.0, 0.02, 0.03], highlights: [0.04, 0.03, 0.0], dateStamp: true }),
+    preset: p({ exposure: 0.2, contrast: 1.2, saturation: 1.22, temperature: 0.3, tint: 0.1, grain: 0.12, vignette: 0.45, shadows: [0.0, 0.03, 0.03], highlights: [0.06, 0.04, -0.02], dateStamp: true }),
   },
-  // CCD
+  // CCD —— 千禧数码卡片机
   {
-    id: "ccds", name: "CCD-S", category: "ccd", icon: ccdSilver, pro: false,
-    likes: { warmth: 0.3, lum: 0.6 },
-    preset: p({ exposure: 0.1, contrast: 1.1, saturation: 1.05, temperature: -0.35, tint: -0.05, grain: 0.04, vignette: 0.1, shadows: [-0.01, 0.0, 0.04], highlights: [0.02, 0.03, 0.06] }),
+    id: "ixus95", name: "IXUS 95", tagline: "冷白皮 · 小红书爆款", category: "ccd", icon: ccdSilver, pro: false, flashTone: "cool",
+    likes: { skin: 0.6, lum: 0.55 },
+    preset: p({ exposure: 0.2, contrast: 1.12, saturation: 0.92, temperature: -0.45, tint: -0.08, fade: 0.04, grain: 0.03, vignette: 0.1, shadows: [-0.02, 0.0, 0.05], highlights: [0.03, 0.04, 0.08] }),
   },
   {
-    id: "cyber03", name: "Cyber 03", category: "ccd", icon: ccdCyber, pro: false,
+    id: "cybert", name: "Cyber T", tagline: "索尼蓝调 · 高饱和", category: "ccd", icon: ccdCyber, pro: false, flashTone: "cool",
     likes: { sat: 0.7, contrast: 0.6 },
-    preset: p({ contrast: 1.22, saturation: 1.35, temperature: -0.1, tint: -0.15, grain: 0.03, vignette: 0.12, shadows: [0.02, -0.01, 0.05], highlights: [0.0, 0.02, 0.03] }),
+    preset: p({ contrast: 1.22, saturation: 1.35, temperature: -0.2, tint: -0.12, grain: 0.03, vignette: 0.12, shadows: [0.0, 0.0, 0.07], highlights: [0.0, 0.02, 0.04] }),
   },
   {
-    id: "dvnight", name: "DV 夜光", category: "ccd", icon: ccdDv, pro: true,
+    id: "dvnight", name: "DV 2003", tagline: "千禧夜视 · 绿调噪点", category: "ccd", icon: ccdDv, pro: true, flashTone: "cool",
     likes: { lum: 0.25 },
-    preset: p({ exposure: 0.45, contrast: 1.15, saturation: 0.8, temperature: -0.2, tint: 0.4, fade: 0.06, grain: 0.16, vignette: 0.4, shadows: [-0.02, 0.05, 0.02], highlights: [0.0, 0.04, 0.0] }),
+    preset: p({ exposure: 0.45, contrast: 1.15, saturation: 0.75, temperature: -0.2, tint: 0.45, fade: 0.08, grain: 0.18, vignette: 0.4, shadows: [-0.02, 0.06, 0.02], highlights: [0.0, 0.05, 0.0] }),
   },
   {
-    id: "candy", name: "糖果 Mini", category: "ccd", icon: ccdCandy, pro: false,
+    id: "pinkccd", name: "粉调 CCD", tagline: "元气粉 · 少女感", category: "ccd", icon: ccdCandy, pro: false, flashTone: "cool",
     likes: { lum: 0.7, skin: 0.5 },
-    preset: p({ exposure: 0.22, contrast: 0.95, saturation: 1.15, temperature: 0.05, tint: -0.2, fade: 0.14, grain: 0.02, vignette: 0.05, shadows: [0.04, 0.01, 0.05], highlights: [0.04, 0.02, 0.04] }),
+    preset: p({ exposure: 0.25, contrast: 0.96, saturation: 1.1, temperature: -0.05, tint: -0.3, fade: 0.14, grain: 0.02, vignette: 0.06, shadows: [0.05, 0.0, 0.05], highlights: [0.05, 0.02, 0.05] }),
   },
   {
-    id: "date98", name: "Date 98", category: "ccd", icon: ccdDate, pro: true,
+    id: "date98", name: "Date 98", tagline: "橙色日期 · 胶卷暖调", category: "ccd", icon: ccdDate, pro: true, flashTone: "warm",
     likes: { warmth: 0.6, sat: 0.5 },
-    preset: p({ exposure: 0.08, contrast: 1.12, saturation: 1.1, temperature: 0.3, tint: 0.05, fade: 0.05, grain: 0.06, vignette: 0.2, shadows: [0.03, 0.0, -0.02], highlights: [0.03, 0.01, -0.02], dateStamp: true }),
+    preset: p({ exposure: 0.08, contrast: 1.12, saturation: 1.1, temperature: 0.35, tint: 0.05, fade: 0.06, grain: 0.06, vignette: 0.2, shadows: [0.03, 0.0, -0.02], highlights: [0.04, 0.02, -0.02], dateStamp: true }),
   },
   // 拍立得
   {
-    id: "frame70", name: "方框 70", category: "instant", icon: instant70, pro: true,
+    id: "sx70", name: "SX-70", tagline: "折叠宝丽来 · 褪色暖黄", category: "instant", icon: instant70, pro: true, flashTone: "soft",
     likes: { warmth: 0.6, contrast: 0.4 },
-    preset: p({ exposure: 0.05, contrast: 0.9, saturation: 0.85, temperature: 0.35, tint: 0.05, fade: 0.22, grain: 0.06, vignette: 0.3, shadows: [0.02, 0.02, -0.02], highlights: [0.05, 0.03, -0.02], frame: { kind: "square", color: "#f2ece0" } }),
+    preset: p({ exposure: 0.05, contrast: 0.88, saturation: 0.8, temperature: 0.4, tint: 0.05, fade: 0.25, grain: 0.06, vignette: 0.3, shadows: [0.02, 0.03, -0.02], highlights: [0.06, 0.04, -0.03], frame: { kind: "square", color: "#f2ece0" } }),
   },
   {
-    id: "mini", name: "宝丽 Mini", category: "instant", icon: instantMini, pro: false,
+    id: "instaxmini", name: "Instax Mini", tagline: "日系白边 · 清透微冷", category: "instant", icon: instantMini, pro: false, flashTone: "soft",
     likes: { skin: 0.6, lum: 0.6 },
-    preset: p({ exposure: 0.15, contrast: 1.02, saturation: 1.08, temperature: -0.05, tint: -0.05, fade: 0.1, grain: 0.03, vignette: 0.12, shadows: [0.0, 0.01, 0.03], highlights: [0.02, 0.02, 0.02], frame: { kind: "mini", color: "#fbfaf7" } }),
+    preset: p({ exposure: 0.18, contrast: 1.0, saturation: 1.05, temperature: -0.12, tint: -0.04, fade: 0.1, grain: 0.03, vignette: 0.1, shadows: [0.0, 0.01, 0.04], highlights: [0.02, 0.03, 0.04], frame: { kind: "mini", color: "#fbfaf7" } }),
   },
   {
-    id: "wide", name: "宽幅 W", category: "instant", icon: instantWide, pro: false,
+    id: "wide300", name: "Wide 300", tagline: "宽幅相纸 · 温润低饱和", category: "instant", icon: instantWide, pro: false, flashTone: "soft",
     likes: { green: 0.5, contrast: 0.5 },
-    preset: p({ exposure: 0.05, contrast: 1.08, saturation: 1.05, temperature: 0.1, tint: 0.1, fade: 0.12, grain: 0.04, vignette: 0.18, shadows: [0.0, 0.02, 0.0], highlights: [0.03, 0.03, 0.0], frame: { kind: "wide", color: "#f5f1e8" } }),
+    preset: p({ exposure: 0.05, contrast: 1.05, saturation: 0.9, temperature: 0.15, tint: 0.08, fade: 0.14, grain: 0.04, vignette: 0.18, shadows: [0.0, 0.02, 0.0], highlights: [0.04, 0.03, 0.0], frame: { kind: "wide", color: "#f5f1e8" } }),
   },
   {
-    id: "dusk", name: "夕照", category: "instant", icon: instantDusk, pro: true,
+    id: "dusk", name: "Dusk 70", tagline: "落日漏光 · 黑边相纸", category: "instant", icon: instantDusk, pro: true, flashTone: "warm",
     likes: { warmth: 0.75, lum: 0.4 },
-    preset: p({ exposure: 0.08, contrast: 1.0, saturation: 1.1, temperature: 0.3, tint: -0.45, fade: 0.16, grain: 0.06, vignette: 0.3, shadows: [0.04, -0.01, 0.04], highlights: [0.06, 0.01, 0.02],
-      leak: { x: 0, y: 1, color: "255,70,120", strength: 0.2 }, frame: { kind: "square", color: "#1c1a1a" } }),
+    preset: p({ exposure: 0.08, contrast: 1.0, saturation: 1.1, temperature: 0.3, tint: -0.45, fade: 0.16, grain: 0.06, vignette: 0.3, shadows: [0.05, -0.01, 0.05], highlights: [0.07, 0.01, 0.02],
+      leak: { x: 0, y: 1, color: "255,70,120", strength: 0.24 }, frame: { kind: "square", color: "#1c1a1a" } }),
   },
   {
-    id: "go", name: "Go 迷你", category: "instant", icon: instantGo, pro: false,
+    id: "rainbow", name: "Rainbow Go", tagline: "彩虹经典 · 浓郁复古", category: "instant", icon: instantGo, pro: false, flashTone: "soft",
     likes: { sat: 0.6, lum: 0.55 },
-    preset: p({ exposure: 0.1, contrast: 1.12, saturation: 1.2, temperature: 0.05, grain: 0.04, vignette: 0.2, shadows: [0.0, 0.0, 0.02], highlights: [0.02, 0.02, 0.0], frame: { kind: "square", color: "#ffffff" } }),
+    preset: p({ exposure: 0.1, contrast: 1.12, saturation: 1.25, temperature: 0.12, tint: 0.02, fade: 0.08, grain: 0.04, vignette: 0.22, shadows: [0.0, 0.0, 0.03], highlights: [0.04, 0.02, 0.0], frame: { kind: "square", color: "#ffffff" } }),
   },
 ];
 
