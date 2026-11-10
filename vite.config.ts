@@ -10,6 +10,13 @@
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 export default defineConfig({
+  vite: {
+    // Pre-bundle UI deps up front so the dev server never re-optimizes mid-session,
+    // which mixes two React copies and blanks the preview ("reading 'useState'").
+    optimizeDeps: {
+      include: ["lucide-react", "clsx", "tailwind-merge", "@radix-ui/react-switch"],
+    },
+  },
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this
