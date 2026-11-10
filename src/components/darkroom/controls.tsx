@@ -33,7 +33,7 @@ export function ExposureDial({ value, onChange }: { value: number; onChange: (v:
         }}
         onPointerUp={() => (start.current = null)}
         onPointerCancel={() => (start.current = null)}
-        className="relative size-[84px] touch-none cursor-grab rounded-full bg-gradient-to-b from-surface-raised to-muted shadow-[inset_0_2px_3px_rgb(255_255_255/0.6),0_6px_14px_-6px_rgb(0_0_0/0.45)] outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        className="relative size-[72px] touch-none cursor-grab rounded-full bg-gradient-to-b from-surface-raised to-muted shadow-[inset_0_2px_3px_rgb(255_255_255/0.6),0_6px_14px_-6px_rgb(0_0_0/0.45)] outline-none focus-visible:ring-2 focus-visible:ring-primary"
       >
         <svg viewBox="0 0 100 100" className="absolute inset-0" style={{ transform: `rotate(${angle}deg)` }}>
           {ticks.map((i) => {
@@ -58,7 +58,7 @@ export function ExposureDial({ value, onChange }: { value: number; onChange: (v:
         </svg>
         <span className="pointer-events-none absolute -top-1.5 left-1/2 h-2 w-0.5 -translate-x-1/2 rounded bg-foreground" />
       </div>
-      <span className="mt-2 font-mono text-sm tabular-nums">
+      <span className="mt-1.5 font-mono text-xs tabular-nums">
         {value > 0 ? "+" : value < 0 ? "−" : "±"}
         {Math.abs(value).toFixed(1)} EV
       </span>
@@ -107,7 +107,7 @@ export function Ruler({
           set(e.clientX);
         }}
         onPointerMove={(e) => e.buttons && set(e.clientX)}
-        className="relative h-9 flex-1 touch-none cursor-pointer outline-none"
+        className="relative h-8 flex-1 touch-none cursor-pointer outline-none"
       >
         <div className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full opacity-70" style={{ background: gradient }} />
         <div className="absolute inset-x-0 top-0 flex h-3 justify-between">

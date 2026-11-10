@@ -145,6 +145,23 @@
   color: var(--foreground);
 }
 
+/* 暗房：深炭色 + 安全灯 */
+.theme-darkroom {
+  --background: oklch(0.16 0.008 40);
+  --foreground: oklch(0.93 0.01 70);
+  --surface: oklch(0.22 0.01 40);
+  --surface-raised: oklch(0.28 0.012 45);
+  --card: oklch(0.22 0.01 40);
+  --card-foreground: oklch(0.93 0.01 70);
+  --muted: oklch(0.3 0.01 40);
+  --muted-foreground: oklch(0.66 0.015 50);
+  --border: oklch(1 0 0 / 12%);
+  --hairline: oklch(1 0 0 / 8%);
+  --input: oklch(1 0 0 / 16%);
+  background: radial-gradient(90% 38% at 50% 0%, oklch(0.42 0.16 25 / 45%), transparent 70%), var(--background);
+  color: var(--foreground);
+}
+
 /* 成品：米白相纸 */
 .theme-paper {
   --background: oklch(0.955 0.014 85);
@@ -242,17 +259,15 @@
 
 /* 暗房显影动画 */
 @keyframes dev-film {
-  0% { opacity: 0; filter: contrast(0.25) brightness(1.6) sepia(0.8) blur(3px); }
-  35% { opacity: 0.35; filter: contrast(0.4) brightness(1.4) sepia(0.6) blur(2px); }
-  100% { opacity: 1; filter: none; }
+  0%, 12% { filter: brightness(2.6) contrast(0.15) grayscale(1); }
+  45% { filter: brightness(1.5) contrast(0.6) grayscale(1); }
+  70% { filter: brightness(1.15) contrast(0.85) grayscale(0.5); }
+  100% { filter: none; }
 }
 @keyframes safelight {
-  0%, 85% { opacity: 1; }
+  0% { opacity: 0; }
+  10%, 85% { opacity: 1; }
   100% { opacity: 0; }
-}
-@keyframes ripple {
-  0%, 100% { transform: translateY(0) skewX(0); }
-  50% { transform: translateY(1.5px) skewX(0.4deg); }
 }
 @keyframes dev-pop {
   0% { transform: scale(0.5); opacity: 0; filter: brightness(2.2); }
@@ -260,19 +275,19 @@
   100% { transform: scale(1); filter: none; }
 }
 @keyframes dev-slide {
-  from { transform: translateY(130%); }
+  from { transform: translateY(120%); }
   to { transform: translateY(0); }
 }
 @keyframes dev-emerge {
-  0%, 25% { filter: brightness(0.35) saturate(0) sepia(0.5) hue-rotate(160deg) contrast(0.5); }
-  60% { filter: brightness(0.8) saturate(0.4) contrast(0.7); }
+  0%, 15% { filter: brightness(0.25) saturate(0) sepia(0.6) hue-rotate(150deg) contrast(0.4); }
+  55% { filter: brightness(0.75) saturate(0.35) sepia(0.3) contrast(0.7); }
   100% { filter: none; }
 }
-.anim-dev-film { animation: dev-film 2.6s ease-in both, ripple 0.9s ease-in-out 3; }
-.anim-safelight { animation: safelight 2.6s ease-out both; }
+.anim-dev-film { animation: dev-film 2.8s ease-in both; }
+.anim-safelight { animation: safelight 2.8s ease-out both; }
 .anim-dev-pop { animation: dev-pop 0.55s cubic-bezier(.2,.9,.3,1.2) both; }
 .anim-dev-slide { animation: dev-slide 0.8s cubic-bezier(.3,.7,.2,1) both; }
-.anim-dev-emerge { animation: dev-emerge 2.6s ease-out 0.6s both; }
+.anim-dev-emerge { animation: dev-emerge 2.6s ease-out 0.7s both; }
 
 /* 安静模式：隐藏非必要动效 */
 [data-quiet="true"] *,

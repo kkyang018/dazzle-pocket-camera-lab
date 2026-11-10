@@ -68,12 +68,12 @@ function CamerasPage() {
   }
 
   return (
-    <main className="flex min-h-[calc(100dvh-5rem)] flex-col px-5 pt-[max(env(safe-area-inset-top),0.75rem)]">
+    <main className="flex h-[calc(100dvh-4.5rem-env(safe-area-inset-bottom))] flex-col overflow-hidden px-5 pt-[max(env(safe-area-inset-top),0.75rem)]">
       {/* 常驻、克制的 Pro 横条 */}
       <button
         type="button"
         onClick={() => showHint(PRO_HINT, "pro")}
-        className="flex h-8 w-full items-center justify-between rounded-full border border-pro/30 bg-pro/[0.07] px-3 text-[11px] text-foreground/85"
+        className="flex h-8 w-full shrink-0 items-center justify-between rounded-full border border-pro/30 bg-pro/[0.07] px-3 text-[11px] text-foreground/85"
       >
         <span className="flex items-center gap-1.5">
           <span className="inline-grid size-3.5 place-items-center rounded-full border-[1.5px] border-pro font-mono text-[7.5px] font-semibold text-pro">
@@ -86,7 +86,7 @@ function CamerasPage() {
         <ChevronRight className="size-3.5 text-pro" />
       </button>
 
-      <header className="mt-3 flex items-center justify-between">
+      <header className="mt-2 flex shrink-0 items-center justify-between">
         <Link
           to="/"
           className="-ml-2 flex items-center gap-0.5 rounded-full px-2 py-1 font-mono text-[11px] text-muted-foreground"
@@ -102,10 +102,10 @@ function CamerasPage() {
         photo={photo}
         base={base?.canvas ?? null}
         preset={camera?.preset ?? null}
-        className="mt-3 h-[min(44dvh,380px)]"
+        className="mt-2 min-h-0 flex-1 max-h-[380px]"
       />
 
-      <div role="tablist" aria-label="相机分类" className="mt-4 flex gap-5 border-b border-hairline">
+      <div role="tablist" aria-label="相机分类" className="mt-3 shrink-0 flex gap-5 border-b border-hairline">
         {CATEGORIES.map((c) => (
           <button
             key={c.id}
@@ -127,7 +127,7 @@ function CamerasPage() {
         key={tab}
         role="tabpanel"
         aria-label={CATEGORIES.find((c) => c.id === tab)?.label}
-        className="scrollbar-none -mx-5 mt-3 flex snap-x scroll-px-5 gap-2.5 overflow-x-auto px-5 py-1"
+        className="scrollbar-none -mx-5 mt-2 flex shrink-0 snap-x scroll-px-5 gap-2.5 overflow-x-auto px-5 py-1"
       >
         {row.map((c) => (
           <CameraCard
@@ -148,10 +148,12 @@ function CamerasPage() {
         ))}
       </div>
 
-      <p className="mt-2 text-center font-mono text-[10px] text-muted-foreground">长按相机置顶 · 长按照片看原图</p>
-      <p className="mt-1 text-center font-mono text-[10px] text-muted-foreground">暗房里可以加闪光灯 · 调曝光和色温 · 显影</p>
+      <p className="mt-1.5 text-center font-mono text-[10px] leading-relaxed text-muted-foreground">
+        长按相机置顶 · 长按照片看原图
+        <br />暗房里可以加闪光灯 · 调曝光和色温 · 显影
+      </p>
 
-      <div className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] mt-auto pt-4 pb-1">
+      <div className="shrink-0 pt-2.5 pb-2">
         <button
           type="button"
           disabled={!camera}

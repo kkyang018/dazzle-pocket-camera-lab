@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ChevronDown, ChevronLeft, Inbox, Zap, ZapOff } from "lucide-react";
+import { ChevronLeft, Inbox, Zap, ZapOff } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AiMark, ApproxTag, ProMark } from "@/components/app/marks";
 import { ExposureDial, Ruler } from "@/components/darkroom/controls";
@@ -48,7 +48,7 @@ function DarkroomPage() {
   const [look, setLookId] = useState<string | null>(null);
   const [pro, setPro] = useState({ grain: 0, fade: 0, sharpen: 0 });
   const [crop, setCrop] = useState({ x: 0.5, y: 0.5 });
-  const [proOpen, setProOpen] = useState(false);
+  const [panel, setPanel] = useState<"basic" | "pro">("basic");
   const [original, setOriginal] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
   const [devKey, setDevKey] = useState(0);
@@ -96,7 +96,7 @@ function DarkroomPage() {
       c.getContext("2d")!.drawImage(out, 0, 0);
     });
     return () => cancelAnimationFrame(f);
-  }, [base, preset, original]);
+  }, [base, preset, original, devKey]);
 
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
@@ -115,9 +115,7 @@ function DarkroomPage() {
   const develop = () => {
     if (!camera) return;
     setDevKey((k) => k + 1);
-    const top = (paperRef.current?.getBoundingClientRect().top ?? 0) + window.scrollY - 64;
-    window.scrollTo({ top: Math.max(0, top), behavior: "instant" });
-    setPhase("developing");
+        setPhase("developing");
     setStage(camera.category === "ccd" ? "store" : "play");
     const total = quietMode ? 50 : DEV_MS[camera.category];
     if (camera.category === "ccd" && !quietMode) timers.current.push(setTimeout(() => setStage("play"), 900));
@@ -166,14 +164,14 @@ function DarkroomPage() {
   const dragStyle: React.CSSProperties | undefined = !drag
     ? undefined
     : drag.mode === "drag"
-      ? { transform: `translate(${drag.dx}px,${drag.dy}px) rotate(${Math.max(-8, Math.min(8, drag.dx / 25))}deg) scale(${overTray ? 0.55 : 0.9})`, transition: "transform 120ms ease-out", boxShadow: "0 30px 50px -18px rgb(0 0 0 / 0.6)" }
+      ? { transform: `translate3d(${drag.dx}px,${drag.dy}px,0) rotate(${Math.max(-8, Math.min(8, drag.dx / 25))}deg) scale(${overTray ? 0.55 : 0.9})`, transition: "none", willChange: "transform", boxShadow: "0 30px 50px -18px rgb(0 0 0 / 0.7)" }
       : drag.mode === "fly"
-        ? { transform: `translate(${drag.dx}px,${drag.dy}px) scale(0.12) rotate(-6deg)`, opacity: 0.2, transition: "transform 360ms cubic-bezier(.5,0,.75,0), opacity 360ms" }
+        ? { transform: `translate3d(${drag.dx}px,${drag.dy}px,0) scale(0.12) rotate(-6deg)`, opacity: 0.2, transition: "transform 360ms cubic-bezier(.5,0,.75,0), opacity 360ms" }
         : { transform: "none", transition: "transform 300ms cubic-bezier(.2,1.4,.4,1)" };
 
   if (!photo || !camera || !preset) {
     return (
-      <main className="theme-warm flex min-h-[calc(100dvh-5rem)] flex-col items-center justify-center px-5 text-center">
+      <main className="theme-darkroom flex min-h-[calc(100dvh-5rem)] flex-col items-center justify-center px-5 text-center">
         <p className="font-serif text-lg">还没选好照片和相机</p>
         <Link to="/" className="mt-5 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground">
           回到 Lab
@@ -192,39 +190,41 @@ function DarkroomPage() {
         : "anim-dev-emerge"
     : "";
 
+  const status = phase === "done" ? "已显影 · 拖到成品台" : developing ? "显影中 · 点照片跳过" : isInstant ? "待显影 · 拖动照片裁剪" : "待显影";
+
   return (
-    <main className="theme-warm relative flex select-none min-h-[calc(100dvh-4rem)] flex-col px-5 pt-[max(env(safe-area-inset-top),1rem)] pb-28">
-      <header className="flex items-center justify-between">
+    <main className="theme-darkroom relative flex h-[calc(100dvh-4.5rem-env(safe-area-inset-bottom))] select-none flex-col overflow-hidden px-5 pt-[max(env(safe-area-inset-top),0.5rem)]">
+      {developing && cat === "film" && (
+        <div className="anim-safelight pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(70%_50%_at_50%_30%,oklch(0.5_0.2_25/0.45),oklch(0.2_0.1_25/0.7))]" />
+      )}
+      <header className="relative z-10 flex shrink-0 items-center justify-between">
         <Link to="/cameras" className="-ml-2 flex items-center gap-0.5 rounded-full px-2 py-1 font-mono text-[11px] text-muted-foreground">
           <ChevronLeft className="size-4" />
           换相机
         </Link>
-        <h1 className="font-serif text-lg font-bold">暗房</h1>
+        <h1 className="font-serif text-base font-bold">暗房</h1>
         <div role="radiogroup" aria-label="闪光灯" className="flex items-center gap-0.5 rounded-full bg-surface p-0.5">
           {strength > 0 ? <Zap className="ml-1 size-3.5 text-primary" /> : <ZapOff className="ml-1 size-3.5 text-muted-foreground" />}
           {FLASH_OPTIONS.map((o) => (
-            <button
-              key={o.id}
-              type="button"
-              role="radio"
-              aria-checked={flash === o.id}
-              onClick={() => edit(setFlash)(o.id)}
-              className={cn(
-                "rounded-full px-2 py-1 font-mono text-[10px]",
-                flash === o.id ? "bg-primary text-primary-foreground" : "text-muted-foreground",
-              )}
-            >
+            <button key={o.id} type="button" role="radio" aria-checked={flash === o.id} onClick={() => edit(setFlash)(o.id)}
+              className={cn("rounded-full px-2 py-1 font-mono text-[10px]", flash === o.id ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>
               {o.label}
             </button>
           ))}
         </div>
       </header>
 
+      {/* 显影状态 */}
+      <div className="relative z-10 mt-2 flex shrink-0 items-center justify-between rounded-full border border-hairline bg-surface/70 px-3 py-1.5 font-mono text-[11px]">
+        <span className="flex items-center gap-1.5">
+          <span className={cn("size-1.5 rounded-full", developing ? "animate-[blink_0.6s_steps(1)_infinite] bg-destructive" : phase === "done" ? "bg-primary" : "bg-muted-foreground")} />
+          {camera.name} · {status}
+        </span>
+        {original ? <span className="rounded-full bg-foreground px-2 py-0.5 text-[10px] text-background">原图</span> : <ApproxTag />}
+      </div>
+
       {/* 相纸 */}
-      <section ref={paperRef} className={cn("relative mt-5 flex h-[min(46dvh,380px)] items-center justify-center", developing && "overflow-hidden")} onClick={developing ? finish : undefined}>
-        {developing && cat === "film" && (
-          <div className="anim-safelight pointer-events-none absolute inset-0 z-20 rounded-xl bg-[radial-gradient(circle,oklch(0.45_0.17_25/0.35),oklch(0.25_0.1_25/0.55))] mix-blend-multiply" />
-        )}
+      <section ref={paperRef} className="relative z-10 mt-2 flex min-h-0 flex-1 items-center justify-center overflow-visible" onClick={developing ? finish : undefined}>
         <div
           key={devKey}
           onPointerDown={onPaperDown}
@@ -234,109 +234,80 @@ function DarkroomPage() {
           style={dragStyle}
           className={cn(
             drag ? "z-40" : "z-10",
-            "relative flex max-h-full max-w-full touch-none bg-surface-raised p-2.5 shadow-[0_18px_40px_-14px_rgb(0_0_0/0.55)]",
-            isInstant && "p-0 bg-transparent",
+            "relative flex h-full max-w-full touch-none items-center justify-center",
+            !isInstant && "bg-surface-raised p-2 shadow-[0_18px_40px_-14px_rgb(0_0_0/0.8)]",
+            isInstant && "drop-shadow-[0_16px_24px_rgb(0_0_0/0.6)]",
+            !isInstant && "h-auto max-h-full",
             developing && cat === "instant" && "anim-dev-slide",
             phase === "done" && "cursor-grab",
             phase === "idle" && isInstant && "cursor-move",
           )}
         >
-          <canvas ref={canvasRef} className={cn("block max-h-[calc(min(46dvh,380px)-1.25rem)] max-w-full", animClass)} />
+          <canvas ref={canvasRef} className={cn("block max-h-full max-w-full object-contain", animClass)} />
         </div>
-
         {developing && cat === "ccd" && stage === "store" && (
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2">
+          <div className="absolute inset-0 z-20 flex items-center justify-center">
             <div className="flex items-center gap-2 rounded-lg bg-foreground px-3 py-2 font-mono text-xs text-background">
-              <span className="size-2 animate-[blink_0.5s_steps(1)_infinite] rounded-full bg-primary" />
+              <span className="size-2 animate-[blink_0.5s_steps(1)_infinite] rounded-full bg-destructive" />
               存储中…
             </div>
           </div>
         )}
-        {developing && (
-          <p className="absolute bottom-1 z-20 font-mono text-[10px] text-muted-foreground">
-            {cat === "film" ? "显影液中…" : cat === "ccd" ? "写入存储卡" : "相纸显影中"} · 点击跳过
-          </p>
-        )}
-
-        <div className="absolute top-1 right-1 z-20 flex gap-1.5">
-          {original ? <span className="rounded-full bg-background/80 px-2 py-0.5 font-mono text-[10px]">原图</span> : <ApproxTag />}
-        </div>
-      </section>
-
-      <div className="mt-2 flex items-center justify-between">
-        <p className="font-mono text-[11px] text-muted-foreground">
-          {camera.name} · {phase === "done" ? "已显影 · 拖到成品台" : isInstant ? "拖动照片调整裁剪" : camera.tagline}
-        </p>
         <button
           type="button"
-          onPointerDown={(e) => {
-            e.currentTarget.setPointerCapture(e.pointerId);
-            setOriginal(true);
-          }}
+          onPointerDown={(e) => { e.stopPropagation(); e.currentTarget.setPointerCapture(e.pointerId); setOriginal(true); }}
           onPointerUp={() => setOriginal(false)}
           onPointerCancel={() => setOriginal(false)}
+          onClick={(e) => e.stopPropagation()}
           aria-pressed={original}
           onContextMenu={(e) => e.preventDefault()}
-          className={cn("touch-hold rounded-full border px-3 py-1 font-mono text-[11px] select-none", original ? "border-foreground bg-foreground text-background" : "border-foreground/25")}
+          className={cn("touch-hold absolute bottom-1 left-0 z-30 rounded-full border px-3 py-1 font-mono text-[11px] select-none backdrop-blur", original ? "border-foreground bg-foreground text-background" : "border-foreground/30 bg-background/60")}
         >
-          原片
+          按住看原片
         </button>
-      </div>
+      </section>
 
-      {/* 快速效果 */}
-      <div className="mt-4 flex justify-center gap-2">
-        {LOOKS.map((l) => (
-          <button
-            key={l.id}
-            type="button"
-            onClick={() => {
-              edit(setAdj)(l.v);
-              setLookId(l.id);
-            }}
-            className={cn(
-              "flex items-center gap-1 rounded-full border px-3.5 py-1.5 text-xs transition-colors",
-              look === l.id ? "border-foreground bg-foreground text-background" : "border-foreground/20 bg-surface",
-            )}
-          >
-            {l.id === aiLook && <AiMark className="size-3" label="AI 推荐" />}
-            {l.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="mt-4 flex justify-center">
-        <ExposureDial value={adj.ev} onChange={(ev) => { edit(setAdj)({ ...adj, ev }); setLookId(null); }} />
-      </div>
-
-      <div className="mt-4 space-y-1">
-        <Ruler
-          label="色温" left="冷" right="暖" value={adj.temp}
-          gradient="linear-gradient(90deg, oklch(0.65 0.12 245), oklch(0.85 0.01 80), oklch(0.72 0.15 60))"
-          onChange={(temp) => { edit(setAdj)({ ...adj, temp }); setLookId(null); }}
-        />
-        <Ruler
-          label="色调" left="绿" right="洋红" value={adj.tint}
-          gradient="linear-gradient(90deg, oklch(0.65 0.13 150), oklch(0.85 0.01 80), oklch(0.62 0.18 350))"
-          onChange={(tint) => { edit(setAdj)({ ...adj, tint }); setLookId(null); }}
-        />
-      </div>
-
-      {/* 暗房模式 */}
-      <section className="mt-4 rounded-2xl bg-surface">
-        <button type="button" onClick={() => setProOpen((v) => !v)} aria-expanded={proOpen} className="flex w-full items-center justify-between px-4 py-3">
-          <span className="font-serif text-sm font-bold">暗房模式</span>
-          <ChevronDown className={cn("size-4 transition-transform", proOpen && "rotate-180")} />
-        </button>
-        {proOpen && (
-          <div className="space-y-3 px-4 pb-4">
+      {/* 调节面板：一屏内切换 */}
+      <section className="relative z-10 mt-2 shrink-0 rounded-2xl bg-surface p-3">
+        <div role="tablist" aria-label="调节" className="mb-2.5 grid grid-cols-2 gap-1 rounded-full bg-background/60 p-0.5 text-xs">
+          {([["basic", "基础调节"], ["pro", "暗房模式 · 颗粒/褪色/锐化"]] as const).map(([id, label]) => (
+            <button key={id} type="button" role="tab" aria-selected={panel === id} onClick={() => setPanel(id)}
+              className={cn("flex items-center justify-center gap-1 rounded-full py-1.5 text-[11px]", panel === id ? "bg-surface-raised font-medium text-foreground" : "text-muted-foreground")}>
+              {label}{id === "pro" && <ProMark />}
+            </button>
+          ))}
+        </div>
+        {panel === "basic" ? (
+          <>
+            <div className="flex justify-center gap-2">
+              {LOOKS.map((l) => (
+                <button key={l.id} type="button" onClick={() => { edit(setAdj)(l.v); setLookId(l.id); }}
+                  className={cn("flex items-center gap-1 rounded-full border px-3 py-1 text-xs", look === l.id ? "border-foreground bg-foreground text-background" : "border-foreground/20")}>
+                  {l.id === aiLook && <AiMark className="size-3" label="AI 推荐" />}
+                  {l.label}
+                </button>
+              ))}
+            </div>
+            <div className="mt-2 flex items-center gap-3">
+              <ExposureDial value={adj.ev} onChange={(ev) => { edit(setAdj)({ ...adj, ev }); setLookId(null); }} />
+              <div className="min-w-0 flex-1">
+                <Ruler label="色温" left="冷" right="暖" value={adj.temp}
+                  gradient="linear-gradient(90deg, oklch(0.65 0.12 245), oklch(0.85 0.01 80), oklch(0.72 0.15 60))"
+                  onChange={(temp) => { edit(setAdj)({ ...adj, temp }); setLookId(null); }} />
+                <Ruler label="色调" left="绿" right="洋红" value={adj.tint}
+                  gradient="linear-gradient(90deg, oklch(0.65 0.13 150), oklch(0.85 0.01 80), oklch(0.62 0.18 350))"
+                  onChange={(tint) => { edit(setAdj)({ ...adj, tint }); setLookId(null); }} />
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="flex h-[118px] flex-col justify-center gap-3">
             {([["grain", "颗粒"], ["fade", "褪色"], ["sharpen", "锐化"]] as const).map(([k, label]) => (
               <label key={k} className="flex items-center gap-3 text-xs">
-                <span className="flex w-12 items-center gap-1">{label}<ProMark /></span>
-                <input
-                  type="range" min={0} max={1} step={0.01} value={pro[k]} aria-label={label}
+                <span className="w-9">{label}</span>
+                <input type="range" min={0} max={1} step={0.01} value={pro[k]} aria-label={label}
                   onChange={(e) => edit(setPro)({ ...pro, [k]: +e.target.value })}
-                  className="flex-1 accent-[var(--primary)]"
-                />
+                  className="flex-1 accent-[var(--primary)]" />
                 <span className="w-7 text-right font-mono text-[10px] tabular-nums">{Math.round(pro[k] * 100)}</span>
               </label>
             ))}
@@ -344,34 +315,21 @@ function DarkroomPage() {
         )}
       </section>
 
-      <div className="mt-5 grid gap-2">
-        <button
-          type="button"
-          onClick={develop}
-          disabled={developing}
-          className="h-12 rounded-full bg-primary text-[15px] font-medium text-primary-foreground shadow-glow-amber active:scale-[0.98] disabled:opacity-60"
-        >
+      <div className="relative z-10 flex shrink-0 items-center gap-2 py-2">
+        <button type="button" onClick={develop} disabled={developing}
+          className="h-11 flex-1 rounded-full bg-primary text-[15px] font-medium text-primary-foreground shadow-glow-amber active:scale-[0.98] disabled:opacity-60">
           {phase === "done" ? "重新显影" : developing ? "显影中…" : "显影"}
         </button>
         {phase === "done" && (
-          <button type="button" onClick={goResult} className="h-12 rounded-full border-2 border-foreground text-[15px] font-medium">
+          <button type="button" onClick={goResult} className="h-11 flex-1 rounded-full border-2 border-foreground text-[14px] font-medium">
             做成成品
           </button>
         )}
-      </div>
-
-      {/* 成品台 */}
-      <div className="pointer-events-none fixed inset-x-0 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-30 mx-auto flex max-w-[390px] justify-end px-4">
-        <div
-          ref={trayRef}
-          onClick={phase === "done" ? goResult : () => showHint("先显影，再把照片拖到这里")}
-          className={cn(
-            "pointer-events-auto flex size-14 flex-col items-center justify-center rounded-2xl border-2 border-dashed bg-surface-raised transition-all",
-            overTray ? "scale-110 border-primary text-primary" : phase === "done" ? "border-foreground/60" : "border-foreground/20 text-muted-foreground",
-          )}
-        >
-          <Inbox className="size-5" />
-          <span className="mt-0.5 text-[9px]">成品台</span>
+        <div ref={trayRef} onClick={phase === "done" ? goResult : () => showHint("先显影，再把照片拖到这里")}
+          className={cn("flex size-11 shrink-0 flex-col items-center justify-center rounded-xl border-2 border-dashed transition-all",
+            overTray ? "scale-125 border-primary text-primary" : phase === "done" ? "border-primary/70 text-primary" : "border-foreground/25 text-muted-foreground")}>
+          <Inbox className="size-4" />
+          <span className="text-[8px]">成品台</span>
         </div>
       </div>
     </main>

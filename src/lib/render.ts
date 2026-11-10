@@ -115,9 +115,9 @@ export function renderWithPreset(src: HTMLCanvasElement, p: Preset, seed = 7) {
   const fl = p.flash ?? 0;
   const tone = p.flashTone ?? "neutral";
   const fT = tone === "cool" ? [0.92, 1.0, 1.1] : tone === "warm" ? [1.1, 1.0, 0.86] : [1, 1, 1];
-  const fBoost = tone === "soft" ? 0.55 : 0.8;
+  const fBoost = tone === "soft" ? 0.7 : 0.85;
   const fcy = cy * 0.85;
-  const fCt = tone === "soft" ? 1.02 : 1.14;
+  const fCt = tone === "soft" ? 1.22 : 1.32;
 
   for (let y = 0, i = 0; y < sh; y++) {
     const dy = y - cy;
@@ -128,10 +128,10 @@ export function renderWithPreset(src: HTMLCanvasElement, p: Preset, seed = 7) {
       if (fl > 0) {
         // 直闪：环境光被压暗，闪光按距离平方衰减照亮前景，暗部被补亮、质感变平
         const fdx = (x - cx) / cx, fdy = (y - fcy) / cy;
-        const fall = 1 / (1 + 2.2 * (fdx * fdx * 0.8 + fdy * fdy));
-        const amb = 1 - 0.5 * fl;
+        const fall = 1 / (1 + 3.4 * (fdx * fdx * 0.8 + fdy * fdy));
+        const amb = 1 - 0.62 * fl;
         const L = 0.299 * r + 0.587 * g + 0.114 * b;
-        const refl = 1 / Math.sqrt(Math.max(L, 0.08)); // 暗部反射被抬起
+        const refl = 1 / Math.pow(Math.max(L, 0.12), 0.3); // 轻度补暗部，保留硬阴影
         const k = fl * fBoost * fall;
         r = r * amb + k * Math.min(1.2, r * refl + 0.05) * fT[0]!;
         g = g * amb + k * Math.min(1.2, g * refl + 0.05) * fT[1]!;
@@ -188,21 +188,6 @@ export function renderWithPreset(src: HTMLCanvasElement, p: Preset, seed = 7) {
     ctx.globalCompositeOperation = "source-over";
   }
 
-  if (fl > 0) {
-    // 高光泛光：缩小再放大得到柔焦副本，用 screen 叠回去
-    const sm = document.createElement("canvas");
-    sm.width = Math.max(1, Math.round(sw / 16));
-    sm.height = Math.max(1, Math.round(sh / 16));
-    const sctx = sm.getContext("2d")!;
-    sctx.drawImage(c, 0, 0, sm.width, sm.height);
-    ctx.save();
-    ctx.globalCompositeOperation = "screen";
-    ctx.globalAlpha = 0.28 * fl;
-    ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(sm, 0, 0, sw, sh);
-    ctx.restore();
-  }
-
   if (p.dateStamp) drawDateStamp(ctx, sw, sh);
 
   if (!frame || !p.frame) return c;
@@ -214,7 +199,30 @@ export function renderWithPreset(src: HTMLCanvasElement, p: Preset, seed = 7) {
   const octx = out.getContext("2d")!;
   octx.fillStyle = p.frame.color;
   octx.fillRect(0, 0, out.width, out.height);
+  // 相纸质感：纸纹、药水囊压痕、影像凹陷阴影
+  const pr = mulberry32(seed + 7);
+  for (let n = 0; n < (out.width * out.height) / 90; n++) {
+    octx.fillStyle = pr() > 0.5 ? "rgba(0,0,0,0.035)" : "rgba(255,255,255,0.05)";
+    octx.fillRect(pr() * out.width, pr() * out.height, 1.4, 1.4);
+  }
+  const bot = out.height - sh - top;
+  if (bot > side * 1.5) {
+    const g = octx.createLinearGradient(0, out.height - bot * 0.35, 0, out.height);
+    g.addColorStop(0, "rgba(0,0,0,0)");
+    g.addColorStop(0.5, "rgba(0,0,0,0.05)");
+    g.addColorStop(1, "rgba(0,0,0,0.12)");
+    octx.fillStyle = g;
+    octx.fillRect(0, out.height - bot * 0.35, out.width, bot * 0.35);
+  }
   octx.drawImage(c, side, top);
+  octx.strokeStyle = "rgba(0,0,0,0.28)";
+  octx.lineWidth = Math.max(1, sw / 400);
+  octx.strokeRect(side, top, sw, sh);
+  const sg = octx.createLinearGradient(0, top, 0, top + sh * 0.06);
+  sg.addColorStop(0, "rgba(0,0,0,0.25)");
+  sg.addColorStop(1, "rgba(0,0,0,0)");
+  octx.fillStyle = sg;
+  octx.fillRect(side, top, sw, sh * 0.06);
   return out;
 }
 
