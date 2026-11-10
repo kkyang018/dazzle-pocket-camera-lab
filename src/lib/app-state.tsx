@@ -1,4 +1,13 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type Context,
+  type ReactNode,
+} from "react";
 import type { Photo } from "./photo";
 
 // 全局原型状态：只存在内存里（不使用 localStorage）。
@@ -11,7 +20,11 @@ type AppState = {
   setPhoto: (p: Photo | null) => void;
 };
 
-const AppContext = createContext<AppState | null>(null);
+// Keep one context object across hot reloads: when this file is edited, a fresh
+// createContext() would no longer match the provider already mounted in the page.
+const CONTEXT_KEY = Symbol.for("dazz-lab.app-context");
+const store = globalThis as typeof globalThis & { [CONTEXT_KEY]?: Context<AppState | null> };
+const AppContext = (store[CONTEXT_KEY] ??= createContext<AppState | null>(null));
 
 function release(p: Photo | null) {
   if (p?.origin === "album") URL.revokeObjectURL(p.src);
