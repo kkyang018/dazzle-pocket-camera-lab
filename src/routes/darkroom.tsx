@@ -265,7 +265,7 @@ function DarkroomPage() {
       </header>
 
       {/* 相纸 */}
-      <section ref={paperRef} className={cn("relative mt-2 flex min-h-0 flex-1 justify-center", drag ? "z-50" : "z-10", isInstant ? "items-start overflow-hidden" : "items-center overflow-visible")} style={isInstant ? { paddingTop: slotH } : undefined} onClick={developing ? finish : undefined}>
+      <section ref={paperRef} className={cn("relative mt-2 flex min-h-0 flex-1 justify-center", drag ? "z-50" : "z-10", isInstant ? cn("items-start", drag ? "overflow-visible" : "overflow-hidden") : "items-center overflow-visible")} style={isInstant ? { paddingTop: slotH } : undefined} onClick={developing ? finish : undefined}>
         {isInstant && (
           <div aria-hidden className="absolute inset-x-6 top-0 z-30 h-[14px] rounded-b-md bg-gradient-to-b from-background to-surface shadow-[0_6px_10px_-4px_rgb(0_0_0/0.8)]">
             <div className="mx-auto mt-[5px] h-[3px] w-[82%] rounded-full bg-background shadow-[inset_0_1px_2px_rgb(0_0_0/0.9)]" />
@@ -340,7 +340,6 @@ function DarkroomPage() {
                 </button>
               ))}
             </div>
-            {aiWhy && look === "ai" && <p className="mt-1 text-center text-[10px] text-ai">{aiWhy} · 可继续微调</p>}
             <div className="mt-2 flex items-center gap-3">
               <ExposureDial value={adj.ev} onChange={(ev) => { edit(setAdj)({ ...adj, ev }); setLookId(null); }} />
               <div className="min-w-0 flex-1">

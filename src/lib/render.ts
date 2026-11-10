@@ -212,12 +212,12 @@ export function renderWithPreset(src: HTMLCanvasElement, p: Preset, seed = 7) {
     octx.fillStyle = g;
     octx.fillRect(0, out.height - bot * 0.35, out.width, bot * 0.35);
   }
-  if (bot > side * 1.5) {
-    for (const f of [0.35, 0.62]) {
-      const yy = out.height - bot * f;
-      octx.fillStyle = "rgba(0,0,0,0.06)"; octx.fillRect(side, yy, out.width - side * 2, Math.max(1, sw / 500));
-      octx.fillStyle = "rgba(255,255,255,0.5)"; octx.fillRect(side, yy + Math.max(1, sw / 500), out.width - side * 2, Math.max(1, sw / 600));
-    }
+  // 细小压纹：极淡的随机短纤维，不画明显横线
+  for (let n = 0; n < (out.width * out.height) / 400; n++) {
+    const x = pr() * out.width, y = pr() * out.height, l = 2 + pr() * 4, a = pr() * Math.PI;
+    octx.strokeStyle = pr() > 0.5 ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.04)";
+    octx.lineWidth = 0.6;
+    octx.beginPath(); octx.moveTo(x, y); octx.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); octx.stroke();
   }
   const sheen = octx.createLinearGradient(0, 0, out.width, out.height);
   sheen.addColorStop(0, "rgba(255,255,255,0.18)"); sheen.addColorStop(0.5, "rgba(255,255,255,0)"); sheen.addColorStop(1, "rgba(120,100,70,0.08)");
