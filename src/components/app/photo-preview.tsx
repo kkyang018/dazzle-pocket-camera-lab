@@ -47,7 +47,7 @@ export function PhotoPreview({
       role="img"
       aria-label={showOriginal ? "原图" : preset ? "当前相机效果预览" : "照片预览"}
       className={cn(
-        "touch-hold relative flex items-center justify-center overflow-hidden rounded-2xl bg-surface",
+        "touch-hold relative flex items-center justify-center",
         className,
       )}
     >

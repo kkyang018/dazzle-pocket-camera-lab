@@ -195,49 +195,39 @@ export function renderWithPreset(src: HTMLCanvasElement, p: Preset, seed = 7) {
   out.width = sw + side * 2;
   out.height = sh + top + Math.round(sw * frame.bottom);
   const octx = out.getContext("2d")!;
+  // 拍立得相纸自带圆角
+  const rad = Math.round(out.width * 0.025);
+  octx.beginPath();
+  octx.roundRect(0, 0, out.width, out.height, rad);
+  octx.clip();
   octx.fillStyle = p.frame.color;
   octx.fillRect(0, 0, out.width, out.height);
-  // 相纸质感：纸纹、药水囊压痕、影像凹陷阴影
   const pr = mulberry32(seed + 7);
-  for (let n = 0; n < (out.width * out.height) / 90; n++) {
-    octx.fillStyle = pr() > 0.5 ? "rgba(0,0,0,0.035)" : "rgba(255,255,255,0.05)";
-    octx.fillRect(pr() * out.width, pr() * out.height, 1.4, 1.4);
-  }
   const bot = out.height - sh - top;
   if (bot > side * 1.5) {
     const g = octx.createLinearGradient(0, out.height - bot * 0.35, 0, out.height);
     g.addColorStop(0, "rgba(0,0,0,0)");
-    g.addColorStop(0.5, "rgba(0,0,0,0.05)");
-    g.addColorStop(1, "rgba(0,0,0,0.12)");
+    g.addColorStop(1, "rgba(0,0,0,0.06)");
     octx.fillStyle = g;
     octx.fillRect(0, out.height - bot * 0.35, out.width, bot * 0.35);
   }
-  // 做旧压纹：纸纤维、轻微泛黄、边缘磨损和淡淡水渍
-  for (let n = 0; n < (out.width * out.height) / 260; n++) {
-    const x = pr() * out.width, y = pr() * out.height, l = 1.5 + pr() * 5, a = pr() * Math.PI;
-    octx.strokeStyle = pr() > 0.5 ? "rgba(90,70,40,0.045)" : "rgba(255,255,255,0.06)";
-    octx.lineWidth = 0.5 + pr() * 0.5;
-    octx.beginPath(); octx.moveTo(x, y); octx.quadraticCurveTo(x + Math.cos(a) * l * 0.5 + pr() - 0.5, y + Math.sin(a) * l * 0.5 + pr() - 0.5, x + Math.cos(a) * l, y + Math.sin(a) * l); octx.stroke();
+  // 压纹：细长纸纤维（中性灰，不泛黄），有明暗两面形成浮雕感
+  const unit = Math.max(1, out.width / 400);
+  for (let n = 0; n < (out.width * out.height) / (140 * unit); n++) {
+    const x = pr() * out.width, y = pr() * out.height, l = (4 + pr() * 10) * unit, a = pr() * Math.PI;
+    const ex = x + Math.cos(a) * l, ey = y + Math.sin(a) * l;
+    const mx = (x + ex) / 2 + (pr() - 0.5) * 2 * unit, my = (y + ey) / 2 + (pr() - 0.5) * 2 * unit;
+    octx.lineWidth = 0.6 * unit;
+    octx.strokeStyle = "rgba(60,60,55,0.07)";
+    octx.beginPath(); octx.moveTo(x, y); octx.quadraticCurveTo(mx, my, ex, ey); octx.stroke();
+    octx.strokeStyle = "rgba(255,255,255,0.12)";
+    octx.beginPath(); octx.moveTo(x, y + unit * 0.7); octx.quadraticCurveTo(mx, my + unit * 0.7, ex, ey + unit * 0.7); octx.stroke();
   }
-  const yel = octx.createRadialGradient(out.width / 2, out.height / 2, Math.min(out.width, out.height) * 0.3, out.width / 2, out.height / 2, Math.max(out.width, out.height) * 0.75);
-  yel.addColorStop(0, "rgba(180,140,70,0)"); yel.addColorStop(1, "rgba(170,130,60,0.16)");
+  const yel = octx.createRadialGradient(out.width / 2, out.height / 2, Math.min(out.width, out.height) * 0.35, out.width / 2, out.height / 2, Math.max(out.width, out.height) * 0.75);
+  yel.addColorStop(0, "rgba(150,140,120,0)"); yel.addColorStop(1, "rgba(150,140,120,0.07)");
   octx.fillStyle = yel; octx.fillRect(0, 0, out.width, out.height);
-  for (let k = 0; k < 3; k++) {
-    const x = pr() * out.width, y = out.height - pr() * bot * 0.9, r = (0.03 + pr() * 0.06) * out.width;
-    const st = octx.createRadialGradient(x, y, r * 0.6, x, y, r);
-    st.addColorStop(0, "rgba(160,120,60,0.012)"); st.addColorStop(0.85, "rgba(150,110,50,0.028)"); st.addColorStop(1, "rgba(150,110,50,0)");
-    octx.fillStyle = st; octx.fillRect(x - r, y - r, r * 2, r * 2);
-  }
-  const ew = Math.max(2, out.width / 160);
-  for (let n = 0; n < out.width / 2; n++) {
-    const t = pr(), side4 = Math.floor(pr() * 4), d = pr() * ew;
-    const x = side4 < 2 ? t * out.width : side4 === 2 ? d : out.width - d;
-    const y = side4 >= 2 ? t * out.height : side4 === 0 ? d : out.height - d;
-    octx.fillStyle = pr() > 0.4 ? "rgba(120,95,60,0.12)" : "rgba(255,255,255,0.25)";
-    octx.fillRect(x, y, 1 + pr() * 2, 1 + pr() * 2);
-  }
   const sheen = octx.createLinearGradient(0, 0, out.width, out.height);
-  sheen.addColorStop(0, "rgba(255,255,255,0.18)"); sheen.addColorStop(0.5, "rgba(255,255,255,0)"); sheen.addColorStop(1, "rgba(120,100,70,0.08)");
+  sheen.addColorStop(0, "rgba(255,255,255,0.15)"); sheen.addColorStop(0.5, "rgba(255,255,255,0)"); sheen.addColorStop(1, "rgba(0,0,0,0.04)");
   octx.fillStyle = sheen; octx.fillRect(0, 0, out.width, out.height);
   octx.drawImage(c, side, top);
   octx.strokeStyle = "rgba(0,0,0,0.28)";

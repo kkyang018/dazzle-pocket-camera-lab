@@ -161,17 +161,17 @@ export const CAMERAS: Camera[] = [
   {
     id: "sx70", name: "SX-70", tagline: "折叠宝丽来 · 褪色暖黄", category: "instant", icon: instant70, pro: true, flashTone: "soft",
     likes: { warmth: 0.6, contrast: 0.4 },
-    preset: p({ exposure: 0.05, contrast: 0.88, saturation: 0.8, temperature: 0.4, tint: 0.05, fade: 0.25, grain: 0.06, vignette: 0.3, shadows: [0.02, 0.03, -0.02], highlights: [0.06, 0.04, -0.03], frame: { kind: "square", color: "#f2ece0" } }),
+    preset: p({ exposure: 0.05, contrast: 0.88, saturation: 0.8, temperature: 0.4, tint: 0.05, fade: 0.25, grain: 0.06, vignette: 0.3, shadows: [0.02, 0.03, -0.02], highlights: [0.06, 0.04, -0.03], frame: { kind: "square", color: "#f3f1ec" } }),
   },
   {
     id: "instaxmini", name: "Instax Mini", tagline: "日系白边 · 清透微冷", category: "instant", icon: instantMini, pro: false, flashTone: "soft",
     likes: { skin: 0.6, lum: 0.6 },
-    preset: p({ exposure: 0.18, contrast: 1.0, saturation: 1.05, temperature: -0.12, tint: -0.04, fade: 0.1, grain: 0.03, vignette: 0.1, shadows: [0.0, 0.01, 0.04], highlights: [0.02, 0.03, 0.04], frame: { kind: "mini", color: "#f6f3ec" } }),
+    preset: p({ exposure: 0.18, contrast: 1.0, saturation: 1.05, temperature: -0.12, tint: -0.04, fade: 0.1, grain: 0.03, vignette: 0.1, shadows: [0.0, 0.01, 0.04], highlights: [0.02, 0.03, 0.04], frame: { kind: "mini", color: "#f7f6f2" } }),
   },
   {
     id: "wide300", name: "Wide 300", tagline: "宽幅相纸 · 温润低饱和", category: "instant", icon: instantWide, pro: false, flashTone: "soft",
     likes: { green: 0.5, contrast: 0.5 },
-    preset: p({ exposure: 0.05, contrast: 1.05, saturation: 0.9, temperature: 0.15, tint: 0.08, fade: 0.14, grain: 0.04, vignette: 0.18, shadows: [0.0, 0.02, 0.0], highlights: [0.04, 0.03, 0.0], frame: { kind: "wide", color: "#f5f1e8" } }),
+    preset: p({ exposure: 0.05, contrast: 1.05, saturation: 0.9, temperature: 0.15, tint: 0.08, fade: 0.14, grain: 0.04, vignette: 0.18, shadows: [0.0, 0.02, 0.0], highlights: [0.04, 0.03, 0.0], frame: { kind: "wide", color: "#f6f5f1" } }),
   },
   {
     id: "dusk", name: "Dusk 70", tagline: "落日漏光 · 黑边相纸", category: "instant", icon: instantDusk, pro: true, flashTone: "warm",
@@ -182,7 +182,7 @@ export const CAMERAS: Camera[] = [
   {
     id: "rainbow", name: "Rainbow Go", tagline: "彩虹经典 · 浓郁复古", category: "instant", icon: instantGo, pro: false, flashTone: "soft",
     likes: { sat: 0.6, lum: 0.55 },
-    preset: p({ exposure: 0.1, contrast: 1.12, saturation: 1.25, temperature: 0.12, tint: 0.02, fade: 0.08, grain: 0.04, vignette: 0.22, shadows: [0.0, 0.0, 0.03], highlights: [0.04, 0.02, 0.0], frame: { kind: "square", color: "#f6f4ee" } }),
+    preset: p({ exposure: 0.1, contrast: 1.12, saturation: 1.25, temperature: 0.12, tint: 0.02, fade: 0.08, grain: 0.04, vignette: 0.22, shadows: [0.0, 0.0, 0.03], highlights: [0.04, 0.02, 0.0], frame: { kind: "square", color: "#f7f6f3" } }),
   },
 ];
 
