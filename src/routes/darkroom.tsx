@@ -22,7 +22,7 @@ const LOOKS: { id: string; label: string; v: Adjust }[] = [
   { id: "strong", label: "强烈", v: { ev: -0.3, temp: 0.4, tint: -0.15 } },
 ];
 type Phase = "idle" | "developing" | "done";
-const DEV_MS = { film: 1700, ccd: 1500, instant: 1900 } as const;
+const DEV_MS = { film: 2700, ccd: 1700, instant: 3300 } as const;
 
 export const Route = createFileRoute("/darkroom")({
   head: () => ({
@@ -53,12 +53,13 @@ function DarkroomPage() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [devKey, setDevKey] = useState(0);
   const [stage, setStage] = useState<"store" | "play">("store");
-  const [drag, setDrag] = useState<{ dx: number; dy: number } | null>(null);
+  const [drag, setDrag] = useState<{ dx: number; dy: number; mode: "drag" | "fly" | "back" } | null>(null);
+  const paperRef = useRef<HTMLElement>(null);
   const [overTray, setOverTray] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const trayRef = useRef<HTMLDivElement>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const dragStart = useRef<{ x: number; y: number; cx: number; cy: number; w: number; h: number } | null>(null);
+  const dragStart = useRef<{ x: number; y: number; cx: number; cy: number; w: number; h: number; mx: number; my: number } | null>(null);
 
   const stats = base?.stats;
   const lum = stats?.lum ?? 0.5;
@@ -87,7 +88,7 @@ function DarkroomPage() {
   useEffect(() => {
     if (!base || !preset) return;
     const f = requestAnimationFrame(() => {
-      const out = renderWithPreset(base.canvas, preset);
+      const out = original ? base.canvas : renderWithPreset(base.canvas, preset);
       const c = canvasRef.current;
       if (!c) return;
       c.width = out.width;
@@ -95,7 +96,7 @@ function DarkroomPage() {
       c.getContext("2d")!.drawImage(out, 0, 0);
     });
     return () => cancelAnimationFrame(f);
-  }, [base, preset]);
+  }, [base, preset, original]);
 
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
@@ -114,6 +115,8 @@ function DarkroomPage() {
   const develop = () => {
     if (!camera) return;
     setDevKey((k) => k + 1);
+    const top = (paperRef.current?.getBoundingClientRect().top ?? 0) + window.scrollY - 64;
+    window.scrollTo({ top: Math.max(0, top), behavior: "instant" });
     setPhase("developing");
     setStage(camera.category === "ccd" ? "store" : "play");
     const total = quietMode ? 50 : DEV_MS[camera.category];
@@ -130,14 +133,14 @@ function DarkroomPage() {
     if (phase === "idle" && !isInstant) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     const r = e.currentTarget.getBoundingClientRect();
-    dragStart.current = { x: e.clientX, y: e.clientY, cx: crop.x, cy: crop.y, w: r.width, h: r.height };
+    dragStart.current = { x: e.clientX, y: e.clientY, cx: crop.x, cy: crop.y, w: r.width, h: r.height, mx: r.left + r.width / 2, my: r.top + r.height / 2 };
   };
   const onPaperMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const s = dragStart.current;
     if (!s) return;
     const dx = e.clientX - s.x, dy = e.clientY - s.y;
     if (phase === "done") {
-      setDrag({ dx, dy });
+      setDrag({ dx, dy, mode: "drag" });
       const t = trayRef.current?.getBoundingClientRect();
       setOverTray(!!t && e.clientX > t.left - 20 && e.clientX < t.right + 20 && e.clientY > t.top - 20 && e.clientY < t.bottom + 20);
     } else {
@@ -146,13 +149,27 @@ function DarkroomPage() {
     }
   };
   const onPaperUp = () => {
+    const s = dragStart.current;
     dragStart.current = null;
-    if (phase === "done" && drag) {
-      if (overTray) goResult();
-      setDrag(null);
-      setOverTray(false);
+    if (phase !== "done" || !drag || !s) return;
+    if (overTray && trayRef.current) {
+      const t = trayRef.current.getBoundingClientRect();
+      setDrag({ dx: t.left + t.width / 2 - s.mx, dy: t.top + t.height / 2 - s.my, mode: "fly" });
+      timers.current.push(setTimeout(goResult, quietMode ? 0 : 380));
+    } else {
+      setDrag({ dx: 0, dy: 0, mode: "back" });
+      timers.current.push(setTimeout(() => setDrag(null), 320));
     }
+    setOverTray(false);
   };
+
+  const dragStyle: React.CSSProperties | undefined = !drag
+    ? undefined
+    : drag.mode === "drag"
+      ? { transform: `translate(${drag.dx}px,${drag.dy}px) rotate(${Math.max(-8, Math.min(8, drag.dx / 25))}deg) scale(${overTray ? 0.55 : 0.9})`, transition: "transform 120ms ease-out", boxShadow: "0 30px 50px -18px rgb(0 0 0 / 0.6)" }
+      : drag.mode === "fly"
+        ? { transform: `translate(${drag.dx}px,${drag.dy}px) scale(0.12) rotate(-6deg)`, opacity: 0.2, transition: "transform 360ms cubic-bezier(.5,0,.75,0), opacity 360ms" }
+        : { transform: "none", transition: "transform 300ms cubic-bezier(.2,1.4,.4,1)" };
 
   if (!photo || !camera || !preset) {
     return (
@@ -176,7 +193,7 @@ function DarkroomPage() {
     : "";
 
   return (
-    <main className="theme-warm relative flex min-h-[calc(100dvh-4rem)] flex-col px-5 pt-[max(env(safe-area-inset-top),1rem)] pb-28">
+    <main className="theme-warm relative flex select-none min-h-[calc(100dvh-4rem)] flex-col px-5 pt-[max(env(safe-area-inset-top),1rem)] pb-28">
       <header className="flex items-center justify-between">
         <Link to="/cameras" className="-ml-2 flex items-center gap-0.5 rounded-full px-2 py-1 font-mono text-[11px] text-muted-foreground">
           <ChevronLeft className="size-4" />
@@ -204,26 +221,27 @@ function DarkroomPage() {
       </header>
 
       {/* 相纸 */}
-      <section className="relative mt-5 flex h-[min(46dvh,380px)] items-center justify-center overflow-hidden" onClick={developing ? finish : undefined}>
+      <section ref={paperRef} className={cn("relative mt-5 flex h-[min(46dvh,380px)] items-center justify-center", developing && "overflow-hidden")} onClick={developing ? finish : undefined}>
+        {developing && cat === "film" && (
+          <div className="anim-safelight pointer-events-none absolute inset-0 z-20 rounded-xl bg-[radial-gradient(circle,oklch(0.45_0.17_25/0.35),oklch(0.25_0.1_25/0.55))] mix-blend-multiply" />
+        )}
         <div
           key={devKey}
           onPointerDown={onPaperDown}
           onPointerMove={onPaperMove}
           onPointerUp={onPaperUp}
           onPointerCancel={onPaperUp}
-          style={drag ? { transform: `translate(${drag.dx}px,${drag.dy}px) scale(${overTray ? 0.45 : 0.85})`, transition: "transform 80ms" } : undefined}
+          style={dragStyle}
           className={cn(
-            "relative z-10 flex max-h-full max-w-full touch-none bg-surface-raised p-2.5 shadow-[0_18px_40px_-14px_rgb(0_0_0/0.55)]",
+            drag ? "z-40" : "z-10",
+            "relative flex max-h-full max-w-full touch-none bg-surface-raised p-2.5 shadow-[0_18px_40px_-14px_rgb(0_0_0/0.55)]",
             isInstant && "p-0 bg-transparent",
             developing && cat === "instant" && "anim-dev-slide",
             phase === "done" && "cursor-grab",
             phase === "idle" && isInstant && "cursor-move",
           )}
         >
-          <canvas ref={canvasRef} className={cn("block max-h-[calc(min(46dvh,380px)-1.25rem)] max-w-full", original && "invisible", animClass)} />
-          {original && (
-            <img src={photo.src} alt="原图" draggable={false} className="pointer-events-none absolute inset-0 m-auto max-h-full max-w-full object-contain" />
-          )}
+          <canvas ref={canvasRef} className={cn("block max-h-[calc(min(46dvh,380px)-1.25rem)] max-w-full", animClass)} />
         </div>
 
         {developing && cat === "ccd" && stage === "store" && (
@@ -251,11 +269,15 @@ function DarkroomPage() {
         </p>
         <button
           type="button"
-          onPointerDown={() => setOriginal(true)}
+          onPointerDown={(e) => {
+            e.currentTarget.setPointerCapture(e.pointerId);
+            setOriginal(true);
+          }}
           onPointerUp={() => setOriginal(false)}
-          onPointerLeave={() => setOriginal(false)}
+          onPointerCancel={() => setOriginal(false)}
+          aria-pressed={original}
           onContextMenu={(e) => e.preventDefault()}
-          className="touch-hold rounded-full border border-foreground/25 px-3 py-1 font-mono text-[11px] select-none active:bg-foreground active:text-background"
+          className={cn("touch-hold rounded-full border px-3 py-1 font-mono text-[11px] select-none", original ? "border-foreground bg-foreground text-background" : "border-foreground/25")}
         >
           原片
         </button>

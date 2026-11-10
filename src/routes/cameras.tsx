@@ -149,9 +149,9 @@ function CamerasPage() {
       </div>
 
       <p className="mt-2 text-center font-mono text-[10px] text-muted-foreground">长按相机置顶 · 长按照片看原图</p>
+      <p className="mt-1 text-center font-mono text-[10px] text-muted-foreground">暗房里可以加闪光灯 · 调曝光和色温 · 显影</p>
 
       <div className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] mt-auto pt-4 pb-1">
-        <p className="mb-2 text-center font-mono text-[10px] text-muted-foreground">暗房里可以加闪光灯 · 调曝光和色温 · 显影</p>
         <button
           type="button"
           disabled={!camera}

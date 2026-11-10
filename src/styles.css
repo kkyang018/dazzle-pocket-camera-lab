@@ -242,26 +242,37 @@
 
 /* 暗房显影动画 */
 @keyframes dev-film {
-  from { filter: blur(16px) brightness(1.7) sepia(0.6); opacity: 0.2; }
-  to { filter: none; opacity: 1; }
+  0% { opacity: 0; filter: contrast(0.25) brightness(1.6) sepia(0.8) blur(3px); }
+  35% { opacity: 0.35; filter: contrast(0.4) brightness(1.4) sepia(0.6) blur(2px); }
+  100% { opacity: 1; filter: none; }
+}
+@keyframes safelight {
+  0%, 85% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes ripple {
+  0%, 100% { transform: translateY(0) skewX(0); }
+  50% { transform: translateY(1.5px) skewX(0.4deg); }
 }
 @keyframes dev-pop {
-  0% { transform: scale(0.55); opacity: 0; }
-  70% { transform: scale(1.04); opacity: 1; }
-  100% { transform: scale(1); }
+  0% { transform: scale(0.5); opacity: 0; filter: brightness(2.2); }
+  60% { transform: scale(1.03); opacity: 1; filter: brightness(1.2); }
+  100% { transform: scale(1); filter: none; }
 }
 @keyframes dev-slide {
-  from { transform: translateY(120%); }
+  from { transform: translateY(130%); }
   to { transform: translateY(0); }
 }
 @keyframes dev-emerge {
-  0%, 30% { filter: blur(12px) grayscale(1) brightness(1.8); opacity: 0.15; }
-  100% { filter: none; opacity: 1; }
+  0%, 25% { filter: brightness(0.35) saturate(0) sepia(0.5) hue-rotate(160deg) contrast(0.5); }
+  60% { filter: brightness(0.8) saturate(0.4) contrast(0.7); }
+  100% { filter: none; }
 }
-.anim-dev-film { animation: dev-film 1.6s ease-out both; }
-.anim-dev-pop { animation: dev-pop 0.45s cubic-bezier(.2,.9,.3,1.2) both; }
-.anim-dev-slide { animation: dev-slide 0.6s ease-out both; }
-.anim-dev-emerge { animation: dev-emerge 1.8s ease-out both; }
+.anim-dev-film { animation: dev-film 2.6s ease-in both, ripple 0.9s ease-in-out 3; }
+.anim-safelight { animation: safelight 2.6s ease-out both; }
+.anim-dev-pop { animation: dev-pop 0.55s cubic-bezier(.2,.9,.3,1.2) both; }
+.anim-dev-slide { animation: dev-slide 0.8s cubic-bezier(.3,.7,.2,1) both; }
+.anim-dev-emerge { animation: dev-emerge 2.6s ease-out 0.6s both; }
 
 /* 安静模式：隐藏非必要动效 */
 [data-quiet="true"] *,

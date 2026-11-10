@@ -115,7 +115,8 @@ export function renderWithPreset(src: HTMLCanvasElement, p: Preset, seed = 7) {
   const fl = p.flash ?? 0;
   const tone = p.flashTone ?? "neutral";
   const fT = tone === "cool" ? [0.92, 1.0, 1.1] : tone === "warm" ? [1.1, 1.0, 0.86] : [1, 1, 1];
-  const fBoost = tone === "soft" ? 0.3 : 0.45;
+  const fBoost = tone === "soft" ? 0.55 : 0.8;
+  const fcy = cy * 0.85;
   const fCt = tone === "soft" ? 1.02 : 1.14;
 
   for (let y = 0, i = 0; y < sh; y++) {
@@ -125,14 +126,19 @@ export function renderWithPreset(src: HTMLCanvasElement, p: Preset, seed = 7) {
       let g = (d[i + 1]! / 255) * ev + tG;
       let b = (d[i + 2]! / 255) * ev + tB;
       if (fl > 0) {
-        const fdx = x - cx;
-        const fd = (fdx * fdx + dy * dy) * inv;
-        const k = fl * Math.max(0, 1 - fd * 1.4);
-        const gain = 1 + fBoost * k;
-        const fall = 1 - fl * 0.35 * fd;
-        r = ((r * gain * fT[0]! - 0.5) * fCt + 0.5) * fall;
-        g = ((g * gain * fT[1]! - 0.5) * fCt + 0.5) * fall;
-        b = ((b * gain * fT[2]! - 0.5) * fCt + 0.5) * fall;
+        // 直闪：环境光被压暗，闪光按距离平方衰减照亮前景，暗部被补亮、质感变平
+        const fdx = (x - cx) / cx, fdy = (y - fcy) / cy;
+        const fall = 1 / (1 + 2.2 * (fdx * fdx * 0.8 + fdy * fdy));
+        const amb = 1 - 0.5 * fl;
+        const L = 0.299 * r + 0.587 * g + 0.114 * b;
+        const refl = 1 / Math.sqrt(Math.max(L, 0.08)); // 暗部反射被抬起
+        const k = fl * fBoost * fall;
+        r = r * amb + k * Math.min(1.2, r * refl + 0.05) * fT[0]!;
+        g = g * amb + k * Math.min(1.2, g * refl + 0.05) * fT[1]!;
+        b = b * amb + k * Math.min(1.2, b * refl + 0.05) * fT[2]!;
+        r = (r - 0.5) * fCt + 0.5;
+        g = (g - 0.5) * fCt + 0.5;
+        b = (b - 0.5) * fCt + 0.5;
       }
       r = (r - 0.5) * ct + 0.5;
       g = (g - 0.5) * ct + 0.5;
@@ -183,15 +189,18 @@ export function renderWithPreset(src: HTMLCanvasElement, p: Preset, seed = 7) {
   }
 
   if (fl > 0) {
-    // 高光泛光
-    const glow = ctx.createRadialGradient(cx, cy * 0.9, 0, cx, cy, Math.max(sw, sh) * 0.45);
-    const col = tone === "warm" ? "255,220,170" : tone === "cool" ? "225,238,255" : "255,255,255";
-    glow.addColorStop(0, `rgba(${col},${0.16 * fl})`);
-    glow.addColorStop(1, `rgba(${col},0)`);
+    // 高光泛光：缩小再放大得到柔焦副本，用 screen 叠回去
+    const sm = document.createElement("canvas");
+    sm.width = Math.max(1, Math.round(sw / 16));
+    sm.height = Math.max(1, Math.round(sh / 16));
+    const sctx = sm.getContext("2d")!;
+    sctx.drawImage(c, 0, 0, sm.width, sm.height);
+    ctx.save();
     ctx.globalCompositeOperation = "screen";
-    ctx.fillStyle = glow;
-    ctx.fillRect(0, 0, sw, sh);
-    ctx.globalCompositeOperation = "source-over";
+    ctx.globalAlpha = 0.28 * fl;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(sm, 0, 0, sw, sh);
+    ctx.restore();
   }
 
   if (p.dateStamp) drawDateStamp(ctx, sw, sh);

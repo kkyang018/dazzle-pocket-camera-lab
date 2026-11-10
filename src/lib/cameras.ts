@@ -128,7 +128,7 @@ export const CAMERAS: Camera[] = [
   },
   // CCD —— 千禧数码卡片机
   {
-    id: "ixus95", name: "IXUS 95", tagline: "冷白皮 · 小红书爆款", category: "ccd", icon: ccdSilver, pro: false, flashTone: "cool",
+    id: "ixus95", name: "IXUS 95", tagline: "冷白皮 · 清透直闪", category: "ccd", icon: ccdSilver, pro: false, flashTone: "cool",
     likes: { skin: 0.6, lum: 0.55 },
     preset: p({ exposure: 0.2, contrast: 1.12, saturation: 0.92, temperature: -0.45, tint: -0.08, fade: 0.04, grain: 0.03, vignette: 0.1, shadows: [-0.02, 0.0, 0.05], highlights: [0.03, 0.04, 0.08] }),
   },
