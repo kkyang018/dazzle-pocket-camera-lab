@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { CAMERAS, CATEGORIES, orderCameras, recommend, scoreCamera, type Camera, type PhotoStats } from "@/lib/cameras";
 
-const cam = (id: string): Camera => ({ ...CAMERAS[0], id, name: id });
+const cam = (id: string): Camera => ({ ...CAMERAS[0]!, id, name: id });
 const five = ["a", "b", "c", "d", "e"].map(cam);
 
 describe("camera shelf", () => {

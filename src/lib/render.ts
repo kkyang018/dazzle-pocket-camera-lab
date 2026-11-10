@@ -42,7 +42,7 @@ export function analyze(src: HTMLCanvasElement): PhotoStats {
   const d = ctx.getImageData(0, 0, c.width, c.height).data;
   let n = 0, lum = 0, lum2 = 0, sat = 0, rs = 0, bs = 0, skin = 0, green = 0;
   for (let i = 0; i < d.length; i += 4) {
-    const r = d[i] / 255, g = d[i + 1] / 255, b = d[i + 2] / 255;
+    const r = d[i]! / 255, g = d[i + 1]! / 255, b = d[i + 2]! / 255;
     const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
     const l = 0.299 * r + 0.587 * g + 0.114 * b;
     lum += l; lum2 += l * l; sat += mx === 0 ? 0 : (mx - mn) / mx; rs += r; bs += b;
@@ -115,9 +115,9 @@ export function renderWithPreset(src: HTMLCanvasElement, p: Preset, seed = 7) {
   for (let y = 0, i = 0; y < sh; y++) {
     const dy = y - cy;
     for (let x = 0; x < sw; x++, i += 4) {
-      let r = (d[i] / 255) * ev + tR;
-      let g = (d[i + 1] / 255) * ev + tG;
-      let b = (d[i + 2] / 255) * ev + tB;
+      let r = (d[i]! / 255) * ev + tR;
+      let g = (d[i + 1]! / 255) * ev + tG;
+      let b = (d[i + 2]! / 255) * ev + tB;
       r = (r - 0.5) * ct + 0.5;
       g = (g - 0.5) * ct + 0.5;
       b = (b - 0.5) * ct + 0.5;

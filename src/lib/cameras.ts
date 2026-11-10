@@ -176,8 +176,8 @@ export function scoreCamera(likes: Partial<PhotoStats>, stats: PhotoStats) {
 export function recommend(cameras: Camera[], scores: Record<string, number>): string[] {
   const sorted = [...cameras].sort((a, b) => (scores[b.id] ?? 0) - (scores[a.id] ?? 0));
   if (sorted.length <= 2) return sorted.map((c) => c.id);
-  const top = scores[sorted[0].id] ?? 0;
-  const third = scores[sorted[2].id] ?? 0;
+  const top = scores[sorted[0]!.id] ?? 0;
+  const third = scores[sorted[2]!.id] ?? 0;
   return sorted.slice(0, third >= top - 0.06 ? 3 : 2).map((c) => c.id);
 }
 
