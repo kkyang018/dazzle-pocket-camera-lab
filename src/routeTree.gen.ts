@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as CamerasRouteImport } from './routes/cameras'
+import { Route as DarkroomRouteImport } from './routes/darkroom'
 import { Route as MeRouteImport } from './routes/me'
 
 const IndexRoute = IndexRouteImport.update({
@@ -23,6 +24,11 @@ const CamerasRoute = CamerasRouteImport.update({
   path: '/cameras',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DarkroomRoute = DarkroomRouteImport.update({
+  id: '/darkroom',
+  path: '/darkroom',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MeRoute = MeRouteImport.update({
   id: '/me',
   path: '/me',
@@ -32,30 +38,34 @@ const MeRoute = MeRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/cameras': typeof CamerasRoute
+  '/darkroom': typeof DarkroomRoute
   '/me': typeof MeRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/cameras': typeof CamerasRoute
+  '/darkroom': typeof DarkroomRoute
   '/me': typeof MeRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/cameras': typeof CamerasRoute
+  '/darkroom': typeof DarkroomRoute
   '/me': typeof MeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/cameras' | '/me'
+  fullPaths: '/' | '/cameras' | '/darkroom' | '/me'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/cameras' | '/me'
-  id: '__root__' | '/' | '/cameras' | '/me'
+  to: '/' | '/cameras' | '/darkroom' | '/me'
+  id: '__root__' | '/' | '/cameras' | '/darkroom' | '/me'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CamerasRoute: typeof CamerasRoute
+  DarkroomRoute: typeof DarkroomRoute
   MeRoute: typeof MeRoute
 }
 
@@ -75,6 +85,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CamerasRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/darkroom': {
+      id: '/darkroom'
+      path: '/darkroom'
+      fullPath: '/darkroom'
+      preLoaderRoute: typeof DarkroomRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/me': {
       id: '/me'
       path: '/me'
@@ -88,6 +105,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CamerasRoute: CamerasRoute,
+  DarkroomRoute: DarkroomRoute,
   MeRoute: MeRoute,
 }
 export const routeTree = rootRouteImport

@@ -13,7 +13,7 @@ export function ProMark({ className }: { className?: string }) {
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        showHint(PRO_HINT);
+        showHint(PRO_HINT, "pro");
       }}
       className={cn(
         "inline-grid size-3.5 shrink-0 place-items-center rounded-full border-[1.5px] border-pro font-mono text-[7.5px] font-semibold leading-none text-pro",
@@ -25,13 +25,29 @@ export function ProMark({ className }: { className?: string }) {
   );
 }
 
+/** AI 推荐角标：四角星 + 文字，青绿色 */
+export function AiBadge({ className }: { className?: string }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-0.5 rounded-full bg-ai/15 py-0.5 pr-1.5 pl-1 text-[9px] leading-none font-medium text-ai",
+        className,
+      )}
+    >
+      <AiMark className="size-2.5" label="" />
+      AI推荐
+    </span>
+  );
+}
+
 /** AI 标记：青绿色四角星，用于 AI 推荐 / AI 生成内容。 */
 export function AiMark({ className, label = "AI 推荐" }: { className?: string; label?: string }) {
   return (
     <svg
       viewBox="0 0 24 24"
-      role="img"
-      aria-label={label}
+      role={label ? "img" : undefined}
+      aria-label={label || undefined}
+      aria-hidden={label ? undefined : true}
       className={cn("inline-block size-3.5 shrink-0 text-ai", className)}
     >
       <path

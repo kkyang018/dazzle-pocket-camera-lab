@@ -1,14 +1,29 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { ChevronLeft } from "lucide-react";
+import { useMemo, useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { CameraCard } from "@/components/app/camera-card";
+import { PRO_HINT } from "@/components/app/marks";
+import { PhotoPreview } from "@/components/app/photo-preview";
+import { usePhotoBase } from "@/hooks/use-photo-base";
 import { useApp } from "@/lib/app-state";
+import {
+  CAMERAS,
+  CATEGORIES,
+  getCamera,
+  orderCameras,
+  recommend,
+  scoreCamera,
+  type CameraCategory,
+} from "@/lib/cameras";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/cameras")({
   head: () => ({
     meta: [
       { title: "相机陈列 · Dazz Lab" },
-      { name: "description", content: "为你的照片挑一台复古相机。" },
+      { name: "description", content: "为你的照片挑一台复古相机：胶片、CCD、拍立得，实时预览效果。" },
       { property: "og:title", content: "相机陈列 · Dazz Lab" },
-      { property: "og:description", content: "为你的照片挑一台复古相机。" },
+      { property: "og:description", content: "胶片、CCD、拍立得，实时预览每台相机的效果。" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -17,17 +32,35 @@ export const Route = createFileRoute("/cameras")({
 });
 
 function CamerasPage() {
-  const { photo } = useApp();
+  const { photo, cameraId, setCameraId, pinned, togglePin, showHint } = useApp();
+  const navigate = useNavigate();
+  const base = usePhotoBase(photo);
+  const camera = getCamera(cameraId);
+  const [tab, setTab] = useState<CameraCategory>(camera?.category ?? "film");
+
+  const stats = base?.stats ?? null;
+  const recommendedIds = useMemo(() => {
+    if (!stats) return new Set<string>();
+    const scores = Object.fromEntries(CAMERAS.map((c) => [c.id, scoreCamera(c.likes, stats)]));
+    return new Set(
+      CATEGORIES.flatMap((cat) => recommend(CAMERAS.filter((c) => c.category === cat.id), scores)),
+    );
+  }, [stats]);
+
+  const row = useMemo(() => {
+    const inTab = CAMERAS.filter((c) => c.category === tab);
+    const recInTab = inTab.filter((c) => recommendedIds.has(c.id));
+    // 推荐内部按分数排序
+    if (stats) recInTab.sort((a, b) => scoreCamera(b.likes, stats) - scoreCamera(a.likes, stats));
+    return orderCameras(inTab, recInTab.map((c) => c.id), pinned);
+  }, [tab, recommendedIds, pinned, stats]);
 
   if (!photo) {
     return (
       <main className="flex min-h-[calc(100dvh-5rem)] flex-col items-center justify-center px-8 text-center">
         <p className="font-serif text-lg">还没有选照片</p>
         <p className="mt-1.5 text-xs text-muted-foreground">先回 Lab 选一张，再来挑相机</p>
-        <Link
-          to="/"
-          className="mt-6 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground"
-        >
+        <Link to="/" className="mt-6 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground">
           去选照片
         </Link>
       </main>
@@ -35,47 +68,105 @@ function CamerasPage() {
   }
 
   return (
-    <main className="flex min-h-[calc(100dvh-5rem)] flex-col px-5 pt-[max(env(safe-area-inset-top),1.25rem)]">
-      <header className="animate-rise">
-        <div className="flex items-center justify-between">
-          <Link
-            to="/"
-            className="-ml-2 flex items-center gap-0.5 rounded-full px-2 py-1 font-mono text-[11px] text-muted-foreground"
-          >
-            <ChevronLeft className="size-4" />
-            换照片
-          </Link>
-          <span className="font-mono text-[10px] tracking-[0.18em] text-muted-foreground uppercase">Step 02</span>
-        </div>
-        <h1 className="mt-5 font-serif text-[32px] leading-none font-bold">相机陈列</h1>
+    <main className="flex min-h-[calc(100dvh-5rem)] flex-col px-5 pt-[max(env(safe-area-inset-top),0.75rem)]">
+      {/* 常驻、克制的 Pro 横条 */}
+      <button
+        type="button"
+        onClick={() => showHint(PRO_HINT, "pro")}
+        className="flex h-8 w-full items-center justify-between rounded-full border border-pro/30 bg-pro/[0.07] px-3 text-[11px] text-foreground/85"
+      >
+        <span className="flex items-center gap-1.5">
+          <span className="inline-grid size-3.5 place-items-center rounded-full border-[1.5px] border-pro font-mono text-[7.5px] font-semibold text-pro">
+            P
+          </span>
+          <span className="font-mono tracking-wide">Dazz Pro</span>
+          <span className="text-muted-foreground">·</span>
+          <span>解锁全部相机</span>
+        </span>
+        <ChevronRight className="size-3.5 text-pro" />
+      </button>
+
+      <header className="mt-3 flex items-center justify-between">
+        <Link
+          to="/"
+          className="-ml-2 flex items-center gap-0.5 rounded-full px-2 py-1 font-mono text-[11px] text-muted-foreground"
+        >
+          <ChevronLeft className="size-4" />
+          换照片
+        </Link>
+        <h1 className="font-serif text-lg font-bold">相机陈列</h1>
+        <span className="w-14 text-right font-mono text-[10px] tracking-[0.18em] text-muted-foreground">02</span>
       </header>
 
-      <figure className="animate-rise mt-6 flex items-center gap-3 rounded-2xl border border-hairline bg-surface p-2.5 [animation-delay:80ms]">
-        <img
-          src={photo.src}
-          alt="已选照片"
-          className="size-16 shrink-0 rounded-lg object-cover"
-          width={64}
-          height={64}
-        />
-        <figcaption className="min-w-0">
-          <span className="block truncate text-sm">{photo.name}</span>
-          <span className="mt-1 block font-mono text-[10px] text-muted-foreground">
-            {photo.width} × {photo.height} · {photo.origin === "album" ? "相册" : "示例"}
-          </span>
-        </figcaption>
-      </figure>
+      <PhotoPreview
+        photo={photo}
+        base={base?.canvas ?? null}
+        preset={camera?.preset ?? null}
+        className="mt-3 h-[min(44dvh,380px)]"
+      />
 
-      <section
-        aria-label="相机架"
-        className="animate-rise mt-4 flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-hairline bg-surface/40 px-6 py-16 text-center [animation-delay:160ms]"
+      <div role="tablist" aria-label="相机分类" className="mt-4 flex gap-5 border-b border-hairline">
+        {CATEGORIES.map((c) => (
+          <button
+            key={c.id}
+            type="button"
+            role="tab"
+            aria-selected={tab === c.id}
+            onClick={() => setTab(c.id)}
+            className={cn(
+              "-mb-px border-b-2 pb-2 text-sm transition-colors",
+              tab === c.id ? "border-primary font-medium text-foreground" : "border-transparent text-muted-foreground",
+            )}
+          >
+            {c.label}
+          </button>
+        ))}
+      </div>
+
+      <div
+        key={tab}
+        role="tabpanel"
+        aria-label={CATEGORIES.find((c) => c.id === tab)?.label}
+        className="scrollbar-none -mx-5 mt-3 flex snap-x scroll-px-5 gap-2.5 overflow-x-auto px-5 py-1"
       >
-        <span className="font-mono text-[11px] tracking-[0.2em] text-muted-foreground">00 / 00</span>
-        <p className="mt-3 font-serif text-lg">相机即将上架</p>
-        <p className="mt-1.5 text-xs text-muted-foreground">下一步会在这里挑一台相机</p>
-      </section>
+        {row.map((c) => (
+          <CameraCard
+            key={c.id}
+            camera={c}
+            selected={c.id === cameraId}
+            recommended={recommendedIds.has(c.id)}
+            pinned={pinned.includes(c.id)}
+            onSelect={() => {
+              setCameraId(c.id);
+              if (c.pro) showHint(PRO_HINT, "pro");
+            }}
+            onTogglePin={() => {
+              const now = togglePin(c.id);
+              showHint(now ? `已置顶 · ${c.name}` : `已取消置顶 · ${c.name}`);
+            }}
+          />
+        ))}
+      </div>
 
-      <div className="h-6" />
+      <p className="mt-2 text-center font-mono text-[10px] text-muted-foreground">长按卡片置顶 · 长按照片看原图</p>
+
+      <div className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] mt-auto pt-4 pb-1">
+        <button
+          type="button"
+          disabled={!camera}
+          onClick={() => navigate({ to: "/darkroom" })}
+          className="flex h-13 w-full items-center justify-center gap-2 rounded-full bg-primary text-[15px] font-medium text-primary-foreground shadow-glow-amber transition-all active:scale-[0.98] disabled:bg-surface-raised disabled:text-muted-foreground disabled:shadow-none"
+        >
+          {camera ? (
+            <>
+              进入暗房
+              <span className="font-mono text-[11px] opacity-70">· {camera.name}</span>
+            </>
+          ) : (
+            "先选一台相机"
+          )}
+        </button>
+      </div>
     </main>
   );
 }

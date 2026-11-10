@@ -14,11 +14,18 @@ import type { Photo } from "./photo";
 type AppState = {
   quietMode: boolean;
   setQuietMode: (v: boolean) => void;
-  hint: { id: number; text: string } | null;
-  showHint: (text: string) => void;
+  hint: { id: number; text: string; kind: HintKind } | null;
+  showHint: (text: string, kind?: HintKind) => void;
   photo: Photo | null;
   setPhoto: (p: Photo | null) => void;
+  cameraId: string | null;
+  setCameraId: (id: string | null) => void;
+  /** 置顶的相机，最近置顶的在前 */
+  pinned: string[];
+  togglePin: (id: string) => boolean;
 };
+
+export type HintKind = "pro" | "info";
 
 // Keep one context object across hot reloads: when this file is edited, a fresh
 // createContext() would no longer match the provider already mounted in the page.
@@ -34,12 +41,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [quietMode, setQuietMode] = useState(false);
   const [hint, setHint] = useState<AppState["hint"]>(null);
   const [photo, setPhotoState] = useState<Photo | null>(null);
+  const [cameraId, setCameraId] = useState<string | null>(null);
+  const [pinned, setPinned] = useState<string[]>([]);
+  const pinnedRef = useRef<string[]>([]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const photoRef = useRef<Photo | null>(null);
 
-  const showHint = useCallback((text: string) => {
+  const showHint = useCallback((text: string, kind: HintKind = "info") => {
     if (timer.current) clearTimeout(timer.current);
-    setHint({ id: Date.now(), text });
+    setHint({ id: Date.now(), text, kind });
     timer.current = setTimeout(() => setHint(null), 1600);
   }, []);
 
@@ -47,6 +57,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (photoRef.current && photoRef.current.src !== p?.src) release(photoRef.current);
     photoRef.current = p;
     setPhotoState(p);
+  }, []);
+
+  const togglePin = useCallback((id: string) => {
+    const was = pinnedRef.current.includes(id);
+    const next = was ? pinnedRef.current.filter((x) => x !== id) : [id, ...pinnedRef.current];
+    pinnedRef.current = next;
+    setPinned(next);
+    return !was;
   }, []);
 
   useEffect(
@@ -58,7 +76,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <AppContext.Provider value={{ quietMode, setQuietMode, hint, showHint, photo, setPhoto }}>
+    <AppContext.Provider value={{
+        quietMode,
+        setQuietMode,
+        hint,
+        showHint,
+        photo,
+        setPhoto,
+        cameraId,
+        setCameraId,
+        pinned,
+        togglePin,
+      }}>
       {children}
     </AppContext.Provider>
   );

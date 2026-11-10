@@ -185,6 +185,20 @@
   box-shadow: var(--shadow-glow-amber);
 }
 
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* 长按时不弹出系统菜单、不选中文字 */
+@utility touch-hold {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 /* 胶片齿孔装饰条 */
 @utility film-perforation {
   background-image: radial-gradient(circle, var(--hairline) 0 2px, transparent 2.5px);
