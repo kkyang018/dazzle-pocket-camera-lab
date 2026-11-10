@@ -52,6 +52,11 @@ export type Preset = {
   flash?: number;
   flashTone?: FlashTone;
   frame?: { kind: "square" | "mini" | "wide"; color: string };
+  /** 锐化 0…1 */
+  sharpen?: number;
+  /** 画幅裁剪中心 0…1（默认居中） */
+  cropX?: number;
+  cropY?: number;
 };
 
 /** 照片画面特征，0…1 */

@@ -36,3 +36,4 @@ use the editor.
 - Shared marks (`ProMark`, `AiMark`, `ApproxTag`) live in `src/components/app/marks.tsx`; reuse them instead of ad-hoc badges so the visual language stays consistent.
 - Page surfaces switch via `.theme-warm` / `.theme-paper` classes in `src/styles.css`, which re-map the semantic tokens; quiet mode disables motion through the `data-quiet` attribute.
 - Client deps used by UI code are listed in `optimizeDeps.include` in `vite.config.ts`; add new runtime UI packages there so dev never re-optimizes mid-session and loads two React copies.
+- Darkroom adjustments are folded into one `Preset` (incl. sharpen/crop) and stored as `look` in AppProvider so the result page re-renders the same look.

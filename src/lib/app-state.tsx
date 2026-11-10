@@ -1,3 +1,4 @@
+import type { Preset } from "@/lib/cameras";
 import {
   createContext,
   useCallback,
@@ -22,6 +23,9 @@ type AppState = {
   setCameraId: (id: string | null) => void;
   /** 置顶的相机，最近置顶的在前 */
   pinned: string[];
+  /** 暗房显影后的最终效果（含用户微调） */
+  look: Preset | null;
+  setLook: (p: Preset | null) => void;
   togglePin: (id: string) => boolean;
 };
 
@@ -43,6 +47,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [photo, setPhotoState] = useState<Photo | null>(null);
   const [cameraId, setCameraId] = useState<string | null>(null);
   const [pinned, setPinned] = useState<string[]>([]);
+  const [look, setLook] = useState<Preset | null>(null);
   const pinnedRef = useRef<string[]>([]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const photoRef = useRef<Photo | null>(null);
@@ -87,6 +92,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setCameraId,
         pinned,
         togglePin,
+        look,
+        setLook,
       }}>
       {children}
     </AppContext.Provider>

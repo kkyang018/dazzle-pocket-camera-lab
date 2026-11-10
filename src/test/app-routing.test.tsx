@@ -16,4 +16,8 @@ describe("App routing", () => {
   it("has a camera display page after choosing a photo", () => {
     expect(router.matchRoutes("/cameras").at(-1)?.routeId).toBe("/cameras");
   });
+  it("has darkroom and result pages", () => {
+    expect(router.matchRoutes("/darkroom").at(-1)?.routeId).toBe("/darkroom");
+    expect(router.matchRoutes("/result").at(-1)?.routeId).toBe("/result");
+  });
 });

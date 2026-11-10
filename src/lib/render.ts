@@ -86,11 +86,11 @@ export function renderWithPreset(src: HTMLCanvasElement, p: Preset, seed = 7) {
   if (frame) {
     if (sw / sh > frame.aspect) {
       const nw = Math.round(sh * frame.aspect);
-      sx = Math.round((sw - nw) / 2);
+      sx = Math.round((sw - nw) * (p.cropX ?? 0.5));
       sw = nw;
     } else {
       const nh = Math.round(sw / frame.aspect);
-      sy = Math.round((sh - nh) / 2);
+      sy = Math.round((sh - nh) * (p.cropY ?? 0.5));
       sh = nh;
     }
   }
@@ -168,6 +168,7 @@ export function renderWithPreset(src: HTMLCanvasElement, p: Preset, seed = 7) {
       d[i + 2] = b * 255;
     }
   }
+  if (p.sharpen && p.sharpen > 0) sharpenData(d, sw, sh, p.sharpen * 0.8);
   ctx.putImageData(img, 0, 0);
 
   if (p.leak) {
@@ -221,4 +222,19 @@ function drawDateStamp(ctx: CanvasRenderingContext2D, w: number, h: number) {
   ctx.shadowBlur = size * 0.5;
   ctx.fillText(text, w - size * 1.1, h - size * 1.1);
   ctx.restore();
+}
+
+/** 3×3 锐化（unsharp 近似） */
+function sharpenData(d: Uint8ClampedArray, w: number, h: number, a: number) {
+  const src = new Uint8ClampedArray(d);
+  const c = 1 + 4 * a;
+  const row = w * 4;
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1, i = y * row + 4; x < w - 1; x++, i += 4) {
+      for (let k = 0; k < 3; k++) {
+        const j = i + k;
+        d[j] = src[j]! * c - a * (src[j - 4]! + src[j + 4]! + src[j - row]! + src[j + row]!);
+      }
+    }
+  }
 }

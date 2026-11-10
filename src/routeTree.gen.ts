@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as CamerasRouteImport } from './routes/cameras'
 import { Route as DarkroomRouteImport } from './routes/darkroom'
 import { Route as MeRouteImport } from './routes/me'
+import { Route as ResultRouteImport } from './routes/result'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -34,18 +35,25 @@ const MeRoute = MeRouteImport.update({
   path: '/me',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ResultRoute = ResultRouteImport.update({
+  id: '/result',
+  path: '/result',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/cameras': typeof CamerasRoute
   '/darkroom': typeof DarkroomRoute
   '/me': typeof MeRoute
+  '/result': typeof ResultRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/cameras': typeof CamerasRoute
   '/darkroom': typeof DarkroomRoute
   '/me': typeof MeRoute
+  '/result': typeof ResultRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -53,13 +61,14 @@ export interface FileRoutesById {
   '/cameras': typeof CamerasRoute
   '/darkroom': typeof DarkroomRoute
   '/me': typeof MeRoute
+  '/result': typeof ResultRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/cameras' | '/darkroom' | '/me'
+  fullPaths: '/' | '/cameras' | '/darkroom' | '/me' | '/result'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/cameras' | '/darkroom' | '/me'
-  id: '__root__' | '/' | '/cameras' | '/darkroom' | '/me'
+  to: '/' | '/cameras' | '/darkroom' | '/me' | '/result'
+  id: '__root__' | '/' | '/cameras' | '/darkroom' | '/me' | '/result'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -67,6 +76,7 @@ export interface RootRouteChildren {
   CamerasRoute: typeof CamerasRoute
   DarkroomRoute: typeof DarkroomRoute
   MeRoute: typeof MeRoute
+  ResultRoute: typeof ResultRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -99,6 +109,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/result': {
+      id: '/result'
+      path: '/result'
+      fullPath: '/result'
+      preLoaderRoute: typeof ResultRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -107,6 +124,7 @@ const rootRouteChildren: RootRouteChildren = {
   CamerasRoute: CamerasRoute,
   DarkroomRoute: DarkroomRoute,
   MeRoute: MeRoute,
+  ResultRoute: ResultRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
