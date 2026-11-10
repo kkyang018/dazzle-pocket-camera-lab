@@ -96,7 +96,12 @@ const base: Preset = {
   shadows: [0, 0, 0],
   highlights: [0, 0, 0],
 };
-const p = (o: Partial<Preset>): Preset => ({ ...base, ...o });
+/** 加强分离色调与饱和，让胶片/CCD 风格更鲜明 */
+const p = (o: Partial<Preset>): Preset => {
+  const m = { ...base, ...o };
+  const k = (c: RGB): RGB => [c[0] * 2, c[1] * 2, c[2] * 2];
+  return { ...m, shadows: k(m.shadows), highlights: k(m.highlights), contrast: 1 + (m.contrast - 1) * 1.4, saturation: m.mono ? 1 : 1 + (m.saturation - 1) * 1.4, vignette: Math.min(0.8, m.vignette * 1.2) };
+};
 
 export const CAMERAS: Camera[] = [
   // 胶片 —— 参考网上最火的胶卷色调

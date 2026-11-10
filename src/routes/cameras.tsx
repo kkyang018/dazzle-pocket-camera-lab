@@ -150,7 +150,6 @@ function CamerasPage() {
 
       <p className="mt-1.5 text-center font-mono text-[10px] leading-relaxed text-muted-foreground">
         长按相机置顶 · 长按照片看原图
-        <br />暗房里可以加闪光灯 · 调曝光和色温 · 显影
       </p>
 
       <div className="shrink-0 pt-2.5 pb-2">
@@ -169,6 +168,9 @@ function CamerasPage() {
             "先选一台相机"
           )}
         </button>
+        {camera && (
+          <p className="mt-1.5 text-center font-mono text-[10px] text-muted-foreground">暗房里可以调曝光和色温 · AI 建议 · 显影</p>
+        )}
       </div>
     </main>
   );

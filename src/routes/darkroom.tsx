@@ -1,20 +1,14 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ChevronLeft, Inbox, SplitSquareHorizontal, Zap, ZapOff } from "lucide-react";
+import { ChevronLeft, Inbox, SplitSquareHorizontal } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AiMark, ApproxTag, ProMark } from "@/components/app/marks";
 import { ExposureDial, Ruler } from "@/components/darkroom/controls";
 import { usePhotoBase } from "@/hooks/use-photo-base";
 import { useApp } from "@/lib/app-state";
-import { flashStrength, getCamera, type FlashMode, type Preset } from "@/lib/cameras";
+import { getCamera, type PhotoStats, type Preset } from "@/lib/cameras";
 import { renderWithPreset } from "@/lib/render";
 import { cn } from "@/lib/utils";
 import { playEject } from "@/lib/sound";
-
-const FLASH_OPTIONS: { id: FlashMode; label: string }[] = [
-  { id: "off", label: "关" },
-  { id: "auto", label: "自动" },
-  { id: "on", label: "开" },
-];
 
 type Adjust = { ev: number; temp: number; tint: number };
 const LOOKS: { id: string; label: string; v: Adjust }[] = [
@@ -22,6 +16,21 @@ const LOOKS: { id: string; label: string; v: Adjust }[] = [
   { id: "classic", label: "经典", v: { ev: 0, temp: 0, tint: 0 } },
   { id: "strong", label: "强烈", v: { ev: -0.3, temp: 0.4, tint: -0.15 } },
 ];
+/** AI 建议：根据亮度/冷暖/绿色/反差给出调整和一句理由 */
+function aiSuggest(st: PhotoStats) {
+  const c = (v: number, a: number) => Math.max(-a, Math.min(a, v));
+  const ev = +c((0.48 - st.lum) * 1.6, 1).toFixed(1);
+  const temp = +c((0.55 - st.warmth) * 1.2, 0.6).toFixed(2);
+  const tint = +c((st.green - 0.35) * 0.6, 0.3).toFixed(2);
+  const why: string[] = [];
+  if (ev > 0.1) why.push(`画面偏暗 +${ev}EV`); else if (ev < -0.1) why.push(`高光偏亮 ${ev}EV`);
+  if (temp > 0.08) why.push("偏冷，加一点暖"); else if (temp < -0.08) why.push("偏暖，收一点黄");
+  if (tint > 0.05) why.push("绿色多，压洋红");
+  const grain = st.contrast < 0.45 ? 0.35 : 0.15;
+  if (st.contrast < 0.45) why.push("反差弱，加颗粒增加质感");
+  return { v: { ev, temp, tint }, grain, why: why.length ? why.join(" · ") : "曝光和色彩都合适，只加一点质感" };
+}
+
 type Phase = "idle" | "developing" | "done";
 const DEV_MS = { film: 2700, ccd: 1700, instant: 3300 } as const;
 
@@ -29,9 +38,9 @@ export const Route = createFileRoute("/darkroom")({
   head: () => ({
     meta: [
       { title: "暗房工作台 · Dazz Lab" },
-      { name: "description", content: "在暗房里调曝光、色温和闪光灯，然后显影你的照片。" },
+      { name: "description", content: "在暗房里调曝光、色温和 AI 建议，然后显影你的照片。" },
       { property: "og:title", content: "暗房工作台 · Dazz Lab" },
-      { property: "og:description", content: "在暗房里调曝光、色温和闪光灯，然后显影你的照片。" },
+      { property: "og:description", content: "在暗房里调曝光、色温和 AI 建议，然后显影你的照片。" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -44,7 +53,6 @@ function DarkroomPage() {
   const navigate = useNavigate();
   const camera = getCamera(cameraId);
   const base = usePhotoBase(photo);
-  const [flash, setFlash] = useState<FlashMode>("auto");
   const [adj, setAdj] = useState<Adjust>({ ev: 0, temp: 0, tint: 0 });
   const [look, setLookId] = useState<string | null>(null);
   const [pro, setPro] = useState({ grain: 0, fade: 0, sharpen: 0 });
@@ -63,9 +71,7 @@ function DarkroomPage() {
   const [box, setBox] = useState({ w: 0, h: 0 });
   const [dim, setDim] = useState({ w: 0, h: 0 });
   const [zoom, setZoom] = useState<{ src: string; big: boolean } | null>(null);
-  const [btnStyle, setBtnStyle] = useState<"A" | "B" | "C">("A");
-  const [slide, setSlide] = useState(0);
-  const slideRef = useRef<{ x: number; w: number } | null>(null);
+  const [aiWhy, setAiWhy] = useState<string | null>(null);
   const moved = useRef(false);
   useEffect(() => {
     const el = paperRef.current;
@@ -77,9 +83,6 @@ function DarkroomPage() {
   const dragStart = useRef<{ x: number; y: number; cx: number; cy: number; w: number; h: number; mx: number; my: number } | null>(null);
 
   const stats = base?.stats;
-  const lum = stats?.lum ?? 0.5;
-  const strength = flashStrength(flash, lum);
-  const aiLook = !stats ? "classic" : lum < 0.4 ? "soft" : stats.contrast < 0.45 ? "strong" : "classic";
   const isInstant = camera?.category === "instant";
 
   const preset = useMemo<Preset | null>(() => {
@@ -93,12 +96,10 @@ function DarkroomPage() {
       grain: p.grain + pro.grain * 0.25,
       fade: Math.min(0.9, p.fade + pro.fade * 0.5),
       sharpen: pro.sharpen,
-      flash: strength,
-      flashTone: camera.flashTone,
       cropX: crop.x,
       cropY: crop.y,
     };
-  }, [camera, adj, pro, strength, crop]);
+  }, [camera, adj, pro, crop]);
 
   useEffect(() => {
     if (!base || !preset) return;
@@ -217,55 +218,21 @@ function DarkroomPage() {
 
   const status = phase === "done" ? "已显影" : developing ? "显影中" : "待显影";
   const slotH = isInstant ? 14 : 0;
-  const pad = isInstant ? 0 : 16;
+  const pad = 0;
   const fit = dim.w && box.w ? Math.min((box.w - pad) / dim.w, (box.h - pad - slotH - 4) / dim.h) : 0;
   const cssSize = fit > 0 ? { width: Math.floor(dim.w * fit), height: Math.floor(dim.h * fit) } : undefined;
 
   const label = phase === "done" ? "重新显影" : developing ? "显影中…" : "显影";
   const led = <span className={cn("size-1.5 shrink-0 rounded-full", developing ? "lamp-on bg-destructive" : phase === "done" ? "bg-muted-foreground/40" : "bg-primary shadow-[0_0_6px_1px_var(--primary)]")} />;
-  const onSlideDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (developing) return;
-    e.currentTarget.setPointerCapture(e.pointerId);
-    slideRef.current = { x: e.clientX, w: e.currentTarget.getBoundingClientRect().width - 44 };
-  };
-  const onSlideMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    const r = slideRef.current;
-    if (r) setSlide(Math.min(1, Math.max(0, (e.clientX - r.x) / r.w)));
-  };
-  const onSlideUp = () => {
-    if (slideRef.current && slide > 0.85) develop();
-    slideRef.current = null;
-    setSlide(0);
-  };
-  const devButton =
-    btnStyle === "A" ? (
+  const devButton = (
       <div className="flex-1 rounded-2xl bg-background p-1 shadow-[inset_0_2px_4px_rgb(0_0_0/0.8),0_1px_0_var(--hairline)]">
         <button type="button" onClick={develop} disabled={developing}
           className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-hairline bg-gradient-to-b from-surface-raised to-surface font-serif text-[15px] tracking-[0.3em] text-primary shadow-[inset_0_1px_0_rgb(255_255_255/0.08),0_2px_3px_rgb(0_0_0/0.6)] transition-transform active:translate-y-[1.5px] active:shadow-[inset_0_2px_4px_rgb(0_0_0/0.6)] disabled:opacity-70">
           {led}<span className="glow-text">{label}</span>
         </button>
       </div>
-    ) : btnStyle === "B" ? (
-      <div onPointerDown={onSlideDown} onPointerMove={onSlideMove} onPointerUp={onSlideUp} onPointerCancel={onSlideUp}
-        className="relative h-11 flex-1 touch-none overflow-hidden rounded-full bg-background shadow-[inset_0_2px_5px_rgb(0_0_0/0.85)]">
-        <div className="absolute inset-y-0 left-0 bg-primary/20" style={{ width: `calc(${slide * 100}% + 22px)` }} />
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-[6px] pl-10">
-          {Array.from({ length: 14 }, (_, i) => <span key={i} className="h-3 w-px bg-foreground/20" />)}
-        </div>
-        <span className="pointer-events-none absolute inset-0 flex items-center justify-center pl-8 font-mono text-[11px] tracking-widest text-muted-foreground">
-          {developing ? "显影中…" : phase === "done" ? "拉闸重新显影 ›››" : "拉闸显影 ›››"}
-        </span>
-        <div className="absolute top-1 left-1 flex size-9 items-center justify-center rounded-full border border-hairline bg-gradient-to-b from-surface-raised to-surface shadow-[0_2px_4px_rgb(0_0_0/0.7)]"
-          style={{ left: `calc(4px + ${slide} * (100% - 44px))` }}>
-          {led}
-        </div>
-      </div>
-    ) : (
-      <button type="button" onClick={develop} disabled={developing}
-        className="flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-primary/50 font-serif text-[15px] tracking-[0.3em] text-primary active:bg-primary/10 disabled:opacity-70">
-        {led}{label}
-      </button>
     );
+  const tip = developing ? "点一下照片跳过" : phase === "done" ? "把照片拖进成品台，或直接点成品台" : isInstant ? "拖动照片调整裁剪 · 点照片看细节" : "点照片看细节 · 调好后按显影";
   const devRow = (
     <div className="relative z-10 flex shrink-0 items-center gap-2 py-2">
       {devButton}
@@ -294,15 +261,7 @@ function DarkroomPage() {
           暗房
           <span className="font-mono text-[10px] font-normal text-muted-foreground">{camera.name}</span>
         </h1>
-        <div role="radiogroup" aria-label="闪光灯" className="flex items-center gap-0.5 rounded-full bg-surface p-0.5">
-          {strength > 0 ? <Zap className="ml-1 size-3.5 text-primary" /> : <ZapOff className="ml-1 size-3.5 text-muted-foreground" />}
-          {FLASH_OPTIONS.map((o) => (
-            <button key={o.id} type="button" role="radio" aria-checked={flash === o.id} onClick={() => edit(setFlash)(o.id)}
-              className={cn("rounded-full px-2 py-1 font-mono text-[10px]", flash === o.id ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>
-              {o.label}
-            </button>
-          ))}
-        </div>
+        <span className="w-14" />
       </header>
 
       {/* 相纸 */}
@@ -313,12 +272,6 @@ function DarkroomPage() {
           </div>
         )}
         <ApproxTag className="absolute top-1 right-1 z-30" />
-      <div role="radiogroup" aria-label="显影按键样式" onClick={(e) => e.stopPropagation()} className="absolute top-1 left-1 z-30 flex gap-0.5 rounded-full bg-background/70 p-0.5 font-mono text-[9px]">
-        {(["A", "B", "C"] as const).map((k) => (
-          <button key={k} type="button" role="radio" aria-checked={btnStyle === k} onClick={() => setBtnStyle(k)}
-            className={cn("rounded-full px-1.5 py-0.5", btnStyle === k ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>{k}</button>
-        ))}
-      </div>
         <div
           key={devKey}
           onPointerDown={onPaperDown}
@@ -329,7 +282,7 @@ function DarkroomPage() {
           className={cn(
             drag ? "z-40" : "z-10",
             "relative flex touch-none items-center justify-center",
-            !isInstant && "bg-surface-raised p-2 shadow-[0_18px_40px_-14px_rgb(0_0_0/0.8)]",
+            !isInstant && "shadow-[0_18px_40px_-14px_rgb(0_0_0/0.8)]",
             isInstant && "drop-shadow-[0_16px_24px_rgb(0_0_0/0.6)]",
             developing && cat === "instant" && "anim-dev-eject",
             phase === "done" && "cursor-grab",
@@ -360,6 +313,7 @@ function DarkroomPage() {
           <SplitSquareHorizontal className="size-4" />
         </button>
       </section>
+      <p className="relative z-10 mt-1 shrink-0 text-center font-mono text-[10px] text-muted-foreground">{tip}</p>
 
       {/* 调节面板：一屏内切换 */}
       <section className="relative z-10 mt-2 shrink-0 rounded-2xl bg-surface p-3">
@@ -373,15 +327,20 @@ function DarkroomPage() {
         </div>
         {panel === "basic" ? (
           <>
-            <div className="flex justify-center gap-2">
+            <div className="flex justify-center gap-1.5">
+              <button type="button" disabled={!stats}
+                onClick={() => { if (!stats) return; const s2 = aiSuggest(stats); edit(setAdj)(s2.v); setPro((p0) => ({ ...p0, grain: s2.grain })); setLookId("ai"); setAiWhy(s2.why); }}
+                className={cn("flex items-center gap-1 rounded-full border px-3 py-1 text-xs", look === "ai" ? "border-ai bg-ai/15 text-ai" : "border-ai/50 text-ai")}>
+                <AiMark className="size-3" label="AI 建议" />AI 建议
+              </button>
               {LOOKS.map((l) => (
-                <button key={l.id} type="button" onClick={() => { edit(setAdj)(l.v); setLookId(l.id); }}
-                  className={cn("flex items-center gap-1 rounded-full border px-3 py-1 text-xs", look === l.id ? "border-foreground bg-foreground text-background" : "border-foreground/20")}>
-                  {l.id === aiLook && <AiMark className="size-3" label="AI 推荐" />}
+                <button key={l.id} type="button" onClick={() => { edit(setAdj)(l.v); setLookId(l.id); setAiWhy(null); }}
+                  className={cn("rounded-full border px-3 py-1 text-xs", look === l.id ? "border-foreground bg-foreground text-background" : "border-foreground/20")}>
                   {l.label}
                 </button>
               ))}
             </div>
+            {aiWhy && look === "ai" && <p className="mt-1 text-center text-[10px] text-ai">{aiWhy} · 可继续微调</p>}
             <div className="mt-2 flex items-center gap-3">
               <ExposureDial value={adj.ev} onChange={(ev) => { edit(setAdj)({ ...adj, ev }); setLookId(null); }} />
               <div className="min-w-0 flex-1">
@@ -407,12 +366,15 @@ function DarkroomPage() {
             ))}
           </div>
         )}
-        {btnStyle === "C" && <div className="-mx-3 -mb-3 mt-3 rounded-b-2xl border-t border-hairline bg-background/40 px-3">{devRow}</div>}
       </section>
 
-      {btnStyle !== "C" && devRow}
+      {devRow}
       {zoom && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-auto bg-background/95" onClick={() => setZoom(null)}>
+          <button type="button" onClick={() => setZoom(null)} aria-label="返回"
+            className="fixed top-[max(env(safe-area-inset-top),0.75rem)] left-3 z-10 flex items-center gap-0.5 rounded-full bg-surface/80 px-3 py-1.5 font-mono text-xs backdrop-blur">
+            <ChevronLeft className="size-4" />返回
+          </button>
           <img src={zoom.src} alt="照片细节" onClick={(e) => { e.stopPropagation(); setZoom({ ...zoom, big: !zoom.big }); }}
             className={cn("transition-transform", zoom.big ? "max-w-none w-[220%]" : "max-h-full max-w-full object-contain")} />
         </div>
