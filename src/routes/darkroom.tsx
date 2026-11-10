@@ -271,7 +271,6 @@ function DarkroomPage() {
             <div className="mx-auto mt-[5px] h-[3px] w-[82%] rounded-full bg-background shadow-[inset_0_1px_2px_rgb(0_0_0/0.9)]" />
           </div>
         )}
-        <ApproxTag className="absolute top-1 right-1 z-30" />
         <div
           key={devKey}
           onPointerDown={onPaperDown}
@@ -299,21 +298,24 @@ function DarkroomPage() {
             </div>
           </div>
         )}
-        <button
-          type="button"
-          onPointerDown={(e) => { e.stopPropagation(); e.currentTarget.setPointerCapture(e.pointerId); setOriginal(true); }}
-          onPointerUp={() => setOriginal(false)}
-          onPointerCancel={() => setOriginal(false)}
-          onClick={(e) => e.stopPropagation()}
-          aria-pressed={original}
-          onContextMenu={(e) => e.preventDefault()}
-          aria-label="按住对比原片"
-          className={cn("touch-hold absolute right-1 bottom-1 z-30 flex size-8 items-center justify-center rounded-full border select-none backdrop-blur", original ? "border-foreground bg-foreground text-background" : "border-foreground/30 bg-background/50")}
-        >
-          <SplitSquareHorizontal className="size-4" />
-        </button>
       </section>
-      <p className="relative z-10 mt-1 shrink-0 text-center font-mono text-[10px] text-muted-foreground">{tip}</p>
+      <div className="relative z-10 mt-1.5 flex shrink-0 items-center gap-2">
+        <ApproxTag className="shrink-0" />
+        <p className="min-w-0 flex-1 truncate text-center font-mono text-[10px] text-muted-foreground">{tip}</p>
+          <button
+        type="button"
+        onPointerDown={(e) => { e.stopPropagation(); e.currentTarget.setPointerCapture(e.pointerId); setOriginal(true); }}
+        onPointerUp={() => setOriginal(false)}
+        onPointerCancel={() => setOriginal(false)}
+        onClick={(e) => e.stopPropagation()}
+        aria-pressed={original}
+        onContextMenu={(e) => e.preventDefault()}
+        aria-label="按住对比原片"
+        className={cn("touch-hold flex size-7 shrink-0 items-center justify-center rounded-full border select-none backdrop-blur", original ? "border-foreground bg-foreground text-background" : "border-foreground/30 bg-background/50")}
+      >
+        <SplitSquareHorizontal className="size-4" />
+      </button>
+      </div>
 
       {/* 调节面板：一屏内切换 */}
       <section className="relative z-10 mt-2 shrink-0 rounded-2xl bg-surface p-3">

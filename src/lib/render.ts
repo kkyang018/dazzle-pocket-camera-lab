@@ -212,12 +212,29 @@ export function renderWithPreset(src: HTMLCanvasElement, p: Preset, seed = 7) {
     octx.fillStyle = g;
     octx.fillRect(0, out.height - bot * 0.35, out.width, bot * 0.35);
   }
-  // 细小压纹：极淡的随机短纤维，不画明显横线
-  for (let n = 0; n < (out.width * out.height) / 400; n++) {
-    const x = pr() * out.width, y = pr() * out.height, l = 2 + pr() * 4, a = pr() * Math.PI;
-    octx.strokeStyle = pr() > 0.5 ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.04)";
-    octx.lineWidth = 0.6;
-    octx.beginPath(); octx.moveTo(x, y); octx.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); octx.stroke();
+  // 做旧压纹：纸纤维、轻微泛黄、边缘磨损和淡淡水渍
+  for (let n = 0; n < (out.width * out.height) / 260; n++) {
+    const x = pr() * out.width, y = pr() * out.height, l = 1.5 + pr() * 5, a = pr() * Math.PI;
+    octx.strokeStyle = pr() > 0.5 ? "rgba(90,70,40,0.045)" : "rgba(255,255,255,0.06)";
+    octx.lineWidth = 0.5 + pr() * 0.5;
+    octx.beginPath(); octx.moveTo(x, y); octx.quadraticCurveTo(x + Math.cos(a) * l * 0.5 + pr() - 0.5, y + Math.sin(a) * l * 0.5 + pr() - 0.5, x + Math.cos(a) * l, y + Math.sin(a) * l); octx.stroke();
+  }
+  const yel = octx.createRadialGradient(out.width / 2, out.height / 2, Math.min(out.width, out.height) * 0.3, out.width / 2, out.height / 2, Math.max(out.width, out.height) * 0.75);
+  yel.addColorStop(0, "rgba(180,140,70,0)"); yel.addColorStop(1, "rgba(170,130,60,0.16)");
+  octx.fillStyle = yel; octx.fillRect(0, 0, out.width, out.height);
+  for (let k = 0; k < 3; k++) {
+    const x = pr() * out.width, y = out.height - pr() * bot * 0.9, r = (0.03 + pr() * 0.06) * out.width;
+    const st = octx.createRadialGradient(x, y, r * 0.6, x, y, r);
+    st.addColorStop(0, "rgba(160,120,60,0.012)"); st.addColorStop(0.85, "rgba(150,110,50,0.028)"); st.addColorStop(1, "rgba(150,110,50,0)");
+    octx.fillStyle = st; octx.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  const ew = Math.max(2, out.width / 160);
+  for (let n = 0; n < out.width / 2; n++) {
+    const t = pr(), side4 = Math.floor(pr() * 4), d = pr() * ew;
+    const x = side4 < 2 ? t * out.width : side4 === 2 ? d : out.width - d;
+    const y = side4 >= 2 ? t * out.height : side4 === 0 ? d : out.height - d;
+    octx.fillStyle = pr() > 0.4 ? "rgba(120,95,60,0.12)" : "rgba(255,255,255,0.25)";
+    octx.fillRect(x, y, 1 + pr() * 2, 1 + pr() * 2);
   }
   const sheen = octx.createLinearGradient(0, 0, out.width, out.height);
   sheen.addColorStop(0, "rgba(255,255,255,0.18)"); sheen.addColorStop(0.5, "rgba(255,255,255,0)"); sheen.addColorStop(1, "rgba(120,100,70,0.08)");
