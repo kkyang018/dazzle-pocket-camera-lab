@@ -28,3 +28,10 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+## Project rules
+
+- Global prototype state (quiet mode, one-line hints) lives in `AppProvider` (`src/lib/app-state.tsx`) as in-memory React state; photo state must also stay in memory, never in web storage.
+- The 390px mobile shell, hint bar and bottom tab bar are rendered in `src/routes/__root.tsx`; each tab is its own route file.
+- Shared marks (`ProMark`, `AiMark`, `ApproxTag`) live in `src/components/app/marks.tsx`; reuse them instead of ad-hoc badges so the visual language stays consistent.
+- Page surfaces switch via `.theme-warm` / `.theme-paper` classes in `src/styles.css`, which re-map the semantic tokens; quiet mode disables motion through the `data-quiet` attribute.
