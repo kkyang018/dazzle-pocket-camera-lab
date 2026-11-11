@@ -77,7 +77,7 @@ function ResultPage() {
   // AI 看图：手绘单张配线、拼图选贴纸/配色/主体位置；结果按照片组缓存
   const soloKey = `${ids}:${opts.seed}`;
   useEffect(() => {
-    if (!imgs || tid !== "solo" || soloAI[soloKey]) return;
+    if (!imgs?.[0] || tid !== "solo" || soloAI[soloKey]) return;
     setSoloAI((m) => ({ ...m, [soloKey]: "pending" }));
     callSolo({ data: { image: thumb(imgs[0]!), variant: opts.seed } })
       .then((r) => { setSoloAI((m) => ({ ...m, [soloKey]: r.ok ? r.data : "err" })); if (!r.ok) showHint(r.error); })
