@@ -23,10 +23,14 @@ describe("成品模板规则", () => {
     expect(usable(getTemplate("halfframe"), ["film", "instant"])).toBe(true);
     expect(usable(getTemplate("puzzle"), ["ccd", "film", "instant"])).toBe(true);
   });
-  it("半格 1 张不能用，3 张只用前 2 张", () => {
+  it("半格只能正好 2 张：1 张和 3 张都不能用", () => {
     const h = getTemplate("halfframe");
-    expect(blockReason(h, ["film"])).toBe("需要 2 张照片");
-    expect(takeCount(h, 3)).toBe(2);
+    expect(blockReason(h, ["film"])).toBe("需要选 2 张");
+    expect(blockReason(h, ["film", "film", "film"])).toBe("需要选 2 张");
+    expect(blockReason(h, ["film", "film"])).toBeNull();
+  });
+  it("选多张时不能做手绘单张", () => {
+    expect(blockReason(getTemplate("solo"), ["film", "ccd"])).toBe("需要选 1 张");
   });
   it("日期印章格式", () => expect(stampText("2026-11-11")).toBe("11 NOV 2026"));
   it("蓝紫背景配黄油黄贴纸", () => expect(contrastCrayon([90, 80, 160])).toBe("#E9D18B"));

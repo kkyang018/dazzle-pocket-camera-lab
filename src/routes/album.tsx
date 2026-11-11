@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Check, Download, ImagePlus, Loader2, Trash2 } from "lucide-react";
+import { Check, ChevronLeft, Download, ImagePlus, Loader2, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { ApproxTag } from "@/components/app/marks";
 import { useApp, type AlbumItem } from "@/lib/app-state";
@@ -12,9 +12,9 @@ const MAX_SELECT = 4;
 export const Route = createFileRoute("/album")({
   head: () => ({
     meta: [
-      { title: "相册 · Dazz Lab" },
+      { title: "印样台 · Dazz Lab" },
       { name: "description", content: "陈列所有显影好的照片，选 1–4 张做成手绘单张、半格、拍立得或拼图成品。" },
-      { property: "og:title", content: "相册 · Dazz Lab" },
+      { property: "og:title", content: "印样台 · Dazz Lab" },
       { property: "og:description", content: "陈列所有显影好的照片，选 1–4 张做成成品。" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -72,8 +72,12 @@ function AlbumPage() {
     <main className="theme-warm min-h-[calc(100dvh-4rem)] px-4 pt-[max(env(safe-area-inset-top),1rem)] pb-32">
       <header className="flex items-end justify-between">
         <div>
+          <button type="button" onClick={() => (window.history.length > 1 ? window.history.back() : navigate({ to: "/" }))}
+            className="-ml-2 mb-1 flex items-center gap-0.5 px-2 py-1 font-mono text-[11px] text-muted-foreground" aria-label="返回">
+            <ChevronLeft className="size-4" /> 返回
+          </button>
           <p className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground uppercase">Contact sheet · {album.length}</p>
-          <h1 className="mt-1 font-serif text-[28px] font-black leading-none">相册</h1>
+          <h1 className="mt-1 font-serif text-[28px] font-black leading-none">印样台</h1>
         </div>
         <button type="button" onClick={() => input.current?.click()}
           className="flex items-center gap-1 rounded-full border border-border px-3 py-1.5 text-[12px]">
@@ -81,7 +85,7 @@ function AlbumPage() {
         </button>
         <input ref={input} type="file" accept="image/*" multiple className="sr-only" tabIndex={-1} aria-hidden onChange={onFile} />
       </header>
-      <p className="mt-2 text-[12px] text-muted-foreground">轻点照片勾选 1–{MAX_SELECT} 张，可以直接保存，也可以做成成品。照片保存在这台设备的浏览器里。</p>
+      <p className="mt-2 text-[12px] text-muted-foreground">轻点照片勾选 1–{MAX_SELECT} 张，可以直接保存到手机，也可以做成成品（1 张：手绘/拍立得 · 2 张：半格 · 3–4 张：拼图）。照片保存在这台设备的浏览器里。</p>
 
       <ul className="mt-4 grid grid-cols-3 gap-1.5">
         {album.map((a) => {
@@ -109,7 +113,7 @@ function AlbumPage() {
         {live.length > 0 ? (
           <div className="flex w-full gap-2">
             {picked.some((a) => a.photo.origin === "album") && (
-              <button type="button" aria-label="从相册删除" onClick={() => removeFromAlbum(picked.filter((a) => a.photo.origin === "album").map((a) => a.id))}
+              <button type="button" aria-label="从印样台删除" onClick={() => removeFromAlbum(picked.filter((a) => a.photo.origin === "album").map((a) => a.id))}
                 className="grid size-12 shrink-0 place-items-center rounded-full bg-card text-foreground shadow-lg">
                 <Trash2 className="size-4" />
               </button>
