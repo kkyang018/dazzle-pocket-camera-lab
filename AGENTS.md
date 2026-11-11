@@ -39,3 +39,4 @@ use the editor.
 - Darkroom adjustments are folded into one `Preset` (incl. sharpen/crop) and stored as `look` in AppProvider so the result page re-renders the same look.
 - Darkroom sizes the photo canvas from a ResizeObserver on the paper area (explicit CSS width/height), so any aspect ratio fits without pushing the header/controls off screen.
 - Album (`album`/`selection` in AppProvider) feeds the result page; each finished-photo template is one canvas `draw` in `src/lib/templates/index.ts`, used for both live preview and full-size export so they never diverge.
+- Template AI (solo hand-drawn lines, collage sticker family/color/subject boxes) runs through server functions in `src/lib/ai/vision.functions.ts` on the Lovable AI Gateway; the model only returns JSON data and the canvas templates draw it, so original photo pixels are never edited and a local fallback draws when AI fails.

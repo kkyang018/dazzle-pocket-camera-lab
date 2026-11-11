@@ -129,7 +129,7 @@ function drawSolo(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOption
   if (o.soloLines) {
     o.soloLines.forEach((st, i) => {
       const pts = st.pts.map(([x, y]) => [px + x * pw, py + y * ph] as [number, number]);
-      crayonStroke(ctx, pts, st.color, (2.2 + st.width * 1.6) * u, o.seed * 97 + i, st.style);
+      crayonStroke(ctx, pts, st.color, (3 + st.width * 1.8) * u, o.seed * 97 + i, st.style);
     });
     return grain(ctx, W, H, 0.06);
   }
@@ -426,7 +426,7 @@ function drawPuzzle(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOpti
     let y = side === 0 ? r.y : side === 1 ? r.y + r.h * t : side === 2 ? r.y + r.h : r.y + r.h * t;
     x += (R() - 0.5) * W * 0.03; y += (R() - 0.5) * W * 0.03;
     const big = R() < 0.3;
-    const s = W * (big ? 0.032 + R() * 0.03 : 0.01 + R() * 0.018);
+    const s = W * (big ? 0.04 + R() * 0.035 : 0.016 + R() * 0.02);
     if (hit(x, y, s)) continue;
     if (placed.some(([px, py, ps]) => Math.hypot(px - x, py - y) < (ps + s) * 1.3)) continue;
     placed.push([x, y, s]);
