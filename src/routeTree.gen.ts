@@ -13,7 +13,6 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AlbumRouteImport } from './routes/album'
 import { Route as CamerasRouteImport } from './routes/cameras'
 import { Route as DarkroomRouteImport } from './routes/darkroom'
-import { Route as GridLabRouteImport } from './routes/grid-lab'
 import { Route as MeRouteImport } from './routes/me'
 import { Route as ResultRouteImport } from './routes/result'
 
@@ -37,11 +36,6 @@ const DarkroomRoute = DarkroomRouteImport.update({
   path: '/darkroom',
   getParentRoute: () => rootRouteImport,
 } as any)
-const GridLabRoute = GridLabRouteImport.update({
-  id: '/grid-lab',
-  path: '/grid-lab',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const MeRoute = MeRouteImport.update({
   id: '/me',
   path: '/me',
@@ -58,7 +52,6 @@ export interface FileRoutesByFullPath {
   '/album': typeof AlbumRoute
   '/cameras': typeof CamerasRoute
   '/darkroom': typeof DarkroomRoute
-  '/grid-lab': typeof GridLabRoute
   '/me': typeof MeRoute
   '/result': typeof ResultRoute
 }
@@ -67,7 +60,6 @@ export interface FileRoutesByTo {
   '/album': typeof AlbumRoute
   '/cameras': typeof CamerasRoute
   '/darkroom': typeof DarkroomRoute
-  '/grid-lab': typeof GridLabRoute
   '/me': typeof MeRoute
   '/result': typeof ResultRoute
 }
@@ -77,26 +69,15 @@ export interface FileRoutesById {
   '/album': typeof AlbumRoute
   '/cameras': typeof CamerasRoute
   '/darkroom': typeof DarkroomRoute
-  '/grid-lab': typeof GridLabRoute
   '/me': typeof MeRoute
   '/result': typeof ResultRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    '/' | '/album' | '/cameras' | '/darkroom' | '/grid-lab' | '/me' | '/result'
+  fullPaths: '/' | '/album' | '/cameras' | '/darkroom' | '/me' | '/result'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    '/' | '/album' | '/cameras' | '/darkroom' | '/grid-lab' | '/me' | '/result'
-  id:
-    | '__root__'
-    | '/'
-    | '/album'
-    | '/cameras'
-    | '/darkroom'
-    | '/grid-lab'
-    | '/me'
-    | '/result'
+  to: '/' | '/album' | '/cameras' | '/darkroom' | '/me' | '/result'
+  id: '__root__' | '/' | '/album' | '/cameras' | '/darkroom' | '/me' | '/result'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -104,7 +85,6 @@ export interface RootRouteChildren {
   AlbumRoute: typeof AlbumRoute
   CamerasRoute: typeof CamerasRoute
   DarkroomRoute: typeof DarkroomRoute
-  GridLabRoute: typeof GridLabRoute
   MeRoute: typeof MeRoute
   ResultRoute: typeof ResultRoute
 }
@@ -139,13 +119,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DarkroomRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/grid-lab': {
-      id: '/grid-lab'
-      path: '/grid-lab'
-      fullPath: '/grid-lab'
-      preLoaderRoute: typeof GridLabRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/me': {
       id: '/me'
       path: '/me'
@@ -168,7 +141,6 @@ const rootRouteChildren: RootRouteChildren = {
   AlbumRoute: AlbumRoute,
   CamerasRoute: CamerasRoute,
   DarkroomRoute: DarkroomRoute,
-  GridLabRoute: GridLabRoute,
   MeRoute: MeRoute,
   ResultRoute: ResultRoute,
 }
