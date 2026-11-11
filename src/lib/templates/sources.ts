@@ -4,21 +4,23 @@ import { EXPORT_EDGE, PREVIEW_EDGE, loadImage, renderWithPreset, scaleToCanvas }
 // 相册照片的显影图：预览用长边 1080，导出用原图重新渲染（长边 ≤4000）。
 const cache = new Map<string, Promise<HTMLCanvasElement>>();
 
-export function developed(item: AlbumItem, edge: number = PREVIEW_EDGE) {
-  const key = `${item.id}:${edge}`;
+/** bare = 去掉显影时烤进去的拍立得相纸边，成品模板自己画相纸/版式，避免双层边框 */
+export function developed(item: AlbumItem, edge: number = PREVIEW_EDGE, bare = false) {
+  const key = `${item.id}:${edge}:${bare}`;
   let p = cache.get(key);
   if (!p) {
     p = loadImage(item.photo.src).then((img) => {
       const base = scaleToCanvas(img, edge);
-      return item.look ? renderWithPreset(base, item.look) : base;
+      const look = item.look && bare ? { ...item.look, frame: undefined } : item.look;
+      return look ? renderWithPreset(base, look) : base;
     });
     if (edge === PREVIEW_EDGE) cache.set(key, p);
   }
   return p;
 }
 
-export function exportSource(item: AlbumItem) {
-  return developed(item, EXPORT_EDGE);
+export function exportSource(item: AlbumItem, bare = false) {
+  return developed(item, EXPORT_EDGE, bare);
 }
 
 export async function thumbnail(item: AlbumItem) {

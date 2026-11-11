@@ -394,11 +394,18 @@ function sticker(ctx: Ctx, fam: StickerFamily, x: number, y: number, r: number, 
   }
 }
 
+/** 把 AI 配色往奶油色拉一点：保持对比但像参考图那样柔和、不刺眼 */
+function softCrayon(hex: string) {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  if (!m) return hex;
+  const cream = [243, 222, 160];
+  return "#" + [m[1], m[2], m[3]].map((h, i) => Math.round(parseInt(h!, 16) * 0.6 + cream[i]! * 0.4).toString(16).padStart(2, "0")).join("");
+}
 export function puzzleSticker(imgs: Img[], o: TemplateOptions) {
   const bg = avgColor(imgs[0]!);
   return {
     family: o.sticker ?? autoSticker(bg),
-    color: o.stickerColor ?? o.puzzleAI?.color ?? contrastCrayon(bg),
+    color: o.stickerColor ?? softCrayon(o.puzzleAI?.color ?? contrastCrayon(bg)),
   };
 }
 /** 每张照片的裁切中心：手动拖过 > AI 主体 > 居中 */

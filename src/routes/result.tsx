@@ -76,7 +76,7 @@ function ResultPage() {
   useEffect(() => {
     let alive = true;
     setImgs(null);
-    Promise.all([loadFonts(), ...items.map((i) => developed(i))]).then(([, ...c]) => alive && setImgs(c as HTMLCanvasElement[]));
+    Promise.all([loadFonts(), ...items.map((i) => developed(i, undefined, true))]).then(([, ...c]) => alive && setImgs(c as HTMLCanvasElement[]));
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ids]);
@@ -163,7 +163,7 @@ function ResultPage() {
     setSaving(true);
     try {
       const n = takeCount(t, items.length);
-      const srcs = await Promise.all(items.slice(0, n).map(exportSource));
+      const srcs = await Promise.all(items.slice(0, n).map((i) => exportSource(i, true)));
       const s = EXPORT_LONG / Math.max(w, h);
       const out = document.createElement("canvas");
       out.width = Math.round(w * s);
