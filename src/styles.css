@@ -18,6 +18,7 @@
 @theme inline {
   --font-serif: "Noto Serif SC", "Songti SC", serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-hand: "Ma Shan Zheng", "Kaiti SC", cursive;
   --font-sans: "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
 
   --radius-sm: calc(var(--radius) - 4px);
