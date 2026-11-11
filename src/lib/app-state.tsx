@@ -9,7 +9,20 @@ import {
   type Context,
   type ReactNode,
 } from "react";
-import type { Photo } from "./photo";
+import { deleteItem, loadAll, putItem } from "./album-store";
+import { placeName } from "./geo";
+import { photoFromSample, type Photo } from "./photo";
+import sampleStreet from "@/assets/sample-street.jpg";
+import samplePortrait from "@/assets/sample-portrait.jpg";
+import sampleCafe from "@/assets/sample-cafe.jpg";
+import sampleSnow from "@/assets/sample-snow.jpg";
+
+const SAMPLES = [
+  { src: sampleSnow, name: "雪山小镇" },
+  { src: sampleStreet, name: "海边小镇" },
+  { src: samplePortrait, name: "公园" },
+  { src: sampleCafe, name: "窗边咖啡" },
+];
 
 // 全局原型状态：只存在内存里（不使用 localStorage）。
 type AppState = {
@@ -29,7 +42,8 @@ type AppState = {
   togglePin: (id: string) => boolean;
   /** 相册：暗房显影后的照片 + 样片，只在内存里 */
   album: AlbumItem[];
-  addToAlbum: (item: Omit<AlbumItem, "id">) => number;
+  addToAlbum: (item: Omit<AlbumItem, "id" | "place">) => number;
+  removeFromAlbum: (ids: number[]) => void;
   /** 相册里选中、要做成成品的照片 id（按选择顺序） */
   selection: number[];
   setSelection: (ids: number[]) => void;
@@ -42,6 +56,8 @@ export type AlbumItem = {
   look: Preset | null;
   cameraName: string | null;
   category: CameraCategory | null;
+  /** 照片拍摄地（EXIF GPS 识别），样片用样片名 */
+  place: string | null;
 };
 
 export type HintKind = "pro" | "info";
@@ -84,11 +100,53 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPhotoState(p);
   }, []);
 
-  const addToAlbum = useCallback((item: Omit<AlbumItem, "id">) => {
+  const addToAlbum = useCallback((item: Omit<AlbumItem, "id" | "place">) => {
     const id = nextId.current++;
     albumSrcs.current.add(item.photo.src);
-    setAlbum((a) => [{ ...item, id }, ...a]);
+    const sample = item.photo.origin === "sample";
+    setAlbum((a) => [{ ...item, id, place: sample ? item.photo.name : null }, ...a]);
+    const file = item.photo.file;
+    if (!sample && file) {
+      const rec = { id, blob: file, name: item.photo.name, width: item.photo.width, height: item.photo.height,
+        look: item.look, cameraName: item.cameraName, category: item.category, place: null as string | null };
+      void putItem(rec);
+      void placeName(file).then((place) => {
+        if (!place) return;
+        setAlbum((a) => a.map((x) => (x.id === id ? { ...x, place } : x)));
+        void putItem({ ...rec, place });
+      });
+    }
     return id;
+  }, []);
+
+  const removeFromAlbum = useCallback((ids: number[]) => {
+    setAlbum((a) => a.filter((x) => !ids.includes(x.id)));
+    setSelection((s) => s.filter((x) => !ids.includes(x)));
+    ids.forEach((id) => void deleteItem(id));
+  }, []);
+
+  // 打开时读回本地保存的相册，再放样片（样片不保存）
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const stored = await loadAll();
+      const samples: AlbumItem[] = [];
+      for (const s of SAMPLES) {
+        try { samples.push({ id: 0, photo: await photoFromSample(s), look: null, cameraName: null, category: null, place: s.name }); } catch { /* 跳过 */ }
+      }
+      if (!alive) return;
+      samples.forEach((x, i) => (x.id = -1 - i));
+      const restored: AlbumItem[] = stored.sort((a, b) => b.id - a.id).map((r) => {
+        const file = new File([r.blob], r.name, { type: r.blob.type });
+        const src = URL.createObjectURL(file);
+        albumSrcs.current.add(src);
+        return { id: r.id, photo: { id: r.id, src, name: r.name, origin: "album", width: r.width, height: r.height, file },
+          look: r.look, cameraName: r.cameraName, category: r.category, place: r.place };
+      });
+      nextId.current = Math.max(nextId.current, ...stored.map((r) => r.id + 1));
+      setAlbum((a) => [...a, ...restored, ...samples]);
+    })();
+    return () => { alive = false; };
   }, []);
 
   const togglePin = useCallback((id: string) => {
@@ -123,6 +181,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setLook,
         album,
         addToAlbum,
+        removeFromAlbum,
         selection,
         setSelection,
       }}>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TEMPLATES, getTemplate, recommendTemplate, stampText, takeCount, usable } from "@/lib/templates";
+import { TEMPLATES, defaultOptions, getTemplate, recommendTemplate, stampText, takeCount, usable } from "@/lib/templates";
 
 describe("成品模板规则", () => {
   it("选 2 张推荐半格胶片", () => expect(recommendTemplate(2, "ccd")).toBe("halfframe"));
@@ -12,4 +12,9 @@ describe("成品模板规则", () => {
   });
   it("保留 5 款模板", () => expect(TEMPLATES.map((t) => t.id)).toEqual(["halfframe", "polaroid", "solo", "blur", "travel"]));
   it("日期印章格式", () => expect(stampText("2031-09-14")).toBe("14 SEP 2031"));
+});
+
+describe("拍立得默认文字", () => {
+  it("默认文字是照片地点", () => expect(defaultOptions(null, "京都").caption).toBe("京都"));
+  it("没有地点时留空", () => expect(defaultOptions(null).caption).toBe(""));
 });

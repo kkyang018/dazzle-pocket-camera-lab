@@ -1,14 +1,11 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Check, ImagePlus } from "lucide-react";
+import { Check, Download, ImagePlus, Loader2, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { ApproxTag } from "@/components/app/marks";
 import { useApp, type AlbumItem } from "@/lib/app-state";
-import { photoFromFile, photoFromSample } from "@/lib/photo";
-import { thumbnail } from "@/lib/templates/sources";
+import { photoFromFile } from "@/lib/photo";
+import { exportSource, saveCanvases, thumbnail } from "@/lib/templates/sources";
 import { cn } from "@/lib/utils";
-import sampleStreet from "@/assets/sample-street.jpg";
-import samplePortrait from "@/assets/sample-portrait.jpg";
-import sampleCafe from "@/assets/sample-cafe.jpg";
 
 const MAX_SELECT = 4;
 
@@ -26,31 +23,12 @@ export const Route = createFileRoute("/album")({
   component: AlbumPage,
 });
 
-const SAMPLES = [
-  { src: sampleStreet, name: "海边小镇" },
-  { src: samplePortrait, name: "公园笑脸" },
-  { src: sampleCafe, name: "窗边咖啡" },
-];
-let seeding = false;
-
 function AlbumPage() {
-  const { album, addToAlbum, selection, setSelection, showHint } = useApp();
+  const { album, addToAlbum, removeFromAlbum, selection, setSelection, showHint } = useApp();
   const navigate = useNavigate();
   const input = useRef<HTMLInputElement>(null);
   const [thumbs, setThumbs] = useState<Record<number, string>>({});
-
-  // 样片只放一次（内存里）
-  useEffect(() => {
-    if (seeding || album.some((a) => a.photo.origin === "sample")) return;
-    seeding = true;
-    void (async () => {
-      for (const s of [...SAMPLES].reverse()) {
-        try {
-          addToAlbum({ photo: await photoFromSample(s), look: null, cameraName: null, category: null });
-        } catch { /* 跳过 */ }
-      }
-    })();
-  }, [album, addToAlbum]);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     album.filter((a) => !thumbs[a.id]).forEach((a) =>
@@ -76,6 +54,19 @@ function AlbumPage() {
   }
 
   const live = selection.filter((id) => album.some((a) => a.id === id));
+  const picked = live.map((id) => album.find((a) => a.id === id)!);
+
+  async function saveSelected() {
+    setSaving(true);
+    try {
+      const list = await Promise.all(picked.map(async (a, i) => ({ canvas: await exportSource(a), name: `dazzlab-${Date.now()}-${i + 1}.jpg` })));
+      if ((await saveCanvases(list)) === "downloaded") showHint(`已保存 ${list.length} 张`);
+    } catch {
+      showHint("保存失败，再试一次");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <main className="theme-warm min-h-[calc(100dvh-4rem)] px-4 pt-[max(env(safe-area-inset-top),1rem)] pb-32">
@@ -90,7 +81,7 @@ function AlbumPage() {
         </button>
         <input ref={input} type="file" accept="image/*" multiple className="sr-only" tabIndex={-1} aria-hidden onChange={onFile} />
       </header>
-      <p className="mt-2 text-[12px] text-muted-foreground">轻点照片勾选 1–{MAX_SELECT} 张，做成成品。</p>
+      <p className="mt-2 text-[12px] text-muted-foreground">轻点照片勾选 1–{MAX_SELECT} 张，可以直接保存，也可以做成成品。照片保存在这台设备的浏览器里。</p>
 
       <ul className="mt-4 grid grid-cols-3 gap-1.5">
         {album.map((a) => {
@@ -116,10 +107,22 @@ function AlbumPage() {
 
       <div className="fixed inset-x-0 bottom-20 z-30 mx-auto flex w-full max-w-[390px] justify-center px-4">
         {live.length > 0 ? (
-          <button type="button" onClick={() => navigate({ to: "/result" })}
-            className="flex w-full items-center justify-center gap-2 rounded-full bg-primary py-3 font-medium text-primary-foreground shadow-lg">
-            <Check className="size-4" /> 做成成品 · 已选 {live.length} 张
-          </button>
+          <div className="flex w-full gap-2">
+            {picked.some((a) => a.photo.origin === "album") && (
+              <button type="button" aria-label="从相册删除" onClick={() => removeFromAlbum(picked.filter((a) => a.photo.origin === "album").map((a) => a.id))}
+                className="grid size-12 shrink-0 place-items-center rounded-full bg-card text-foreground shadow-lg">
+                <Trash2 className="size-4" />
+              </button>
+            )}
+            <button type="button" onClick={saveSelected} disabled={saving}
+              className="flex shrink-0 items-center justify-center gap-1.5 rounded-full bg-card px-4 text-[13px] font-medium text-foreground shadow-lg disabled:opacity-60">
+              {saving ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />} 保存到相册
+            </button>
+            <button type="button" onClick={() => navigate({ to: "/result" })}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-primary py-3 text-[13px] font-medium text-primary-foreground shadow-lg">
+              <Check className="size-4" /> 做成品 · {live.length}
+            </button>
+          </div>
         ) : (
           <Link to="/" className="rounded-full bg-foreground/80 px-4 py-2 text-[12px] text-background">去 Lab 冲洗新照片</Link>
         )}

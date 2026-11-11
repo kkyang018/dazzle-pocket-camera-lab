@@ -31,6 +31,29 @@ export async function thumbnail(item: AlbumItem) {
   return t.toDataURL("image/jpeg", 0.85);
 }
 
+/** 一次保存多张：能分享就一起分享，否则逐张下载 */
+export async function saveCanvases(list: { canvas: HTMLCanvasElement; name: string }[]) {
+  const files = await Promise.all(list.map(({ canvas, name }) => new Promise<File>((res, rej) =>
+    canvas.toBlob((b) => (b ? res(new File([b], name, { type: "image/jpeg" })) : rej(new Error("encode"))), "image/jpeg", 0.92))));
+  if (navigator.canShare?.({ files })) {
+    try {
+      await navigator.share({ files, title: "Dazz Lab" });
+      return "shared";
+    } catch (e) {
+      if ((e as Error).name === "AbortError") return "cancelled";
+    }
+  }
+  files.forEach((f, i) => setTimeout(() => {
+    const url = URL.createObjectURL(f);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = f.name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }, i * 300));
+  return "downloaded";
+}
+
 /** 保存到相册：优先系统分享（带文件），不支持时普通下载 */
 export async function saveCanvas(canvas: HTMLCanvasElement, name: string) {
   const blob = await new Promise<Blob>((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error("encode"))), "image/jpeg", 0.92));

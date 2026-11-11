@@ -33,12 +33,15 @@ function ResultPage() {
   const lead = items[0] ?? null;
   const rec = recommendTemplate(items.length, lead?.category ?? null);
   const [tid, setTid] = useState<TemplateId>(rec);
-  const [opts, setOpts] = useState<TemplateOptions>(() => defaultOptions(lead?.cameraName ?? null));
+  const [opts, setOpts] = useState<TemplateOptions>(() => defaultOptions(lead?.cameraName ?? null, lead?.place ?? null));
+  // 地点识别是异步的：识别到后若文字还空着就填进去
+  useEffect(() => { if (lead?.place) setOpts((o) => (o.caption ? o : { ...o, caption: lead.place! })); }, [lead?.place]);
   const [imgs, setImgs] = useState<HTMLCanvasElement[] | null>(null);
   const [saving, setSaving] = useState(false);
   const canvas = useRef<HTMLCanvasElement>(null);
   const t = getTemplate(tid);
   const ids = items.map((i) => i.id).join(",");
+  const places = useMemo(() => items.map((i) => i.place), [items]);
 
   useEffect(() => {
     let alive = true;
@@ -56,10 +59,10 @@ function ResultPage() {
       const [w, h] = t.size;
       c.width = w;
       c.height = h;
-      t.draw(c.getContext("2d")!, w, h, imgs.slice(0, takeCount(t, imgs.length)), opts);
+      t.draw(c.getContext("2d")!, w, h, imgs.slice(0, takeCount(t, imgs.length)), { ...opts, places });
     });
     return () => cancelAnimationFrame(raf);
-  }, [imgs, opts, t]);
+  }, [imgs, opts, t, places]);
 
   const set = <K extends keyof TemplateOptions>(k: K, v: TemplateOptions[K]) => setOpts((o) => ({ ...o, [k]: v }));
   const pick = (id: TemplateId) => {
@@ -79,7 +82,7 @@ function ResultPage() {
       const out = document.createElement("canvas");
       out.width = EXPORT_W;
       out.height = Math.round((EXPORT_W * h) / w);
-      t.draw(out.getContext("2d")!, out.width, out.height, full, opts);
+      t.draw(out.getContext("2d")!, out.width, out.height, full, { ...opts, places });
       const r = await saveCanvas(out, `dazzlab-${t.id}-${Date.now()}.jpg`);
       if (r === "downloaded") showHint("已保存");
     } catch {
@@ -142,13 +145,13 @@ function ResultPage() {
 
           <section className="mt-3 space-y-3 rounded-2xl bg-card p-3">
             {t.fields.includes("caption") && (
-              <Field label="打字机文字">
+              <Field label={t.id === "polaroid" ? "地点 · 打字机字" : t.id === "solo" ? "标题" : "文字"}>
                 <input value={opts.caption} onChange={(e) => set("caption", e.target.value)} maxLength={60}
-                  className="w-full bg-transparent text-[15px] outline-none [font-family:'Special_Elite',serif]" placeholder="first light, slow afternoon" />
+                  className="w-full bg-transparent text-[15px] outline-none [font-family:'Special_Elite',serif]" placeholder="照片里没有地点信息，手动写一个" />
               </Field>
             )}
             {t.fields.includes("note") && (
-              <Field label="手写文字">
+              <Field label={t.id === "solo" ? "短句" : "手写文字"}>
                 <textarea value={opts.note} onChange={(e) => set("note", e.target.value)} rows={2} maxLength={90}
                   className="w-full resize-none bg-transparent text-[14px] outline-none" placeholder="写一句给这张照片的话" />
               </Field>
