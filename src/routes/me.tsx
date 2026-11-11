@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { Switch } from "@/components/ui/switch";
 import { AiMark, ApproxTag, ProMark } from "@/components/app/marks";
 import { LocalProcessingNote } from "@/components/app/local-note";
@@ -26,7 +26,6 @@ function MePage() {
       <header className="animate-rise">
         <span className="font-mono text-[10px] tracking-[0.18em] text-muted-foreground uppercase">Profile</span>
         <h1 className="mt-6 font-serif text-[32px] leading-none font-bold">我的</h1>
-        <Link to="/grid-lab" className="mt-3 inline-block font-mono text-[11px] text-primary">四宫格波点调试 →</Link>
       </header>
 
       <section className="mt-8">
