@@ -1,8 +1,9 @@
 import type { CameraCategory } from "@/lib/cameras";
+import type { PuzzleAI, SoloStroke, StickerFamily } from "./ai-types";
 import { FONTS, cover, grain, rng, type Ctx, type Img } from "./draw";
 
+export type { PuzzleAI, SoloStroke, StickerFamily } from "./ai-types";
 export type TemplateId = "solo" | "halfframe" | "polaroid" | "puzzle";
-export type StickerFamily = "dot" | "star" | "heart";
 export type PolaroidFormat = "mini" | "square" | "wide";
 
 export type TemplateOptions = {
@@ -23,6 +24,12 @@ export type TemplateOptions = {
   stickerColor: string | null;
   /** 贴纸/手绘线随机排布 */
   seed: number;
+  /** 拼图：每张照片裁切中心（可拖动）；null = 用 AI 主体位置 */
+  pcrops: ([number, number] | null)[];
+  /** 手绘单张：AI 看图配的线；null = 本地备用画法，"pending" = 等待中只画照片 */
+  soloLines: SoloStroke[] | null | "pending";
+  /** 拼图：AI 选的贴纸族/配色/主体位置 */
+  puzzleAI: PuzzleAI | null;
 };
 
 export type TemplateDef = {
@@ -118,6 +125,14 @@ function drawSolo(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOption
   if (ph > H * 0.5) { ph = H * 0.5; pw = ph * ar; }
   const px = (W - pw) / 2, py = (H - ph) / 2;
   ctx.drawImage(img, px, py, pw, ph);
+  if (o.soloLines === "pending") return grain(ctx, W, H, 0.06);
+  if (o.soloLines) {
+    o.soloLines.forEach((st, i) => {
+      const pts = st.pts.map(([x, y]) => [px + x * pw, py + y * ph] as [number, number]);
+      crayonStroke(ctx, pts, st.color, (2.2 + st.width * 1.6) * u, o.seed * 97 + i, st.style);
+    });
+    return grain(ctx, W, H, 0.06);
+  }
   // 三色：取照片色加深/提亮，线条有实线、虚线、点线
   const night = lum < 0.35, cool = base[2] > base[0];
   const c1 = hex(mix(base, night ? [240, 200, 120] : [214, 120, 70], 0.7));
@@ -227,101 +242,196 @@ function drawPolaroid(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOp
   ctx.textBaseline = "alphabetic";
 }
 
-// ── ④ 规则拼图：模糊照片底 + 颗粒 + 单族蜡笔贴纸压在照片边缘 ─────────
+// ── ④ 规则拼图：动态模糊照片底 + 轻颗粒 + 单族蜡笔贴纸压在照片边缘 ─────
 type Rect = { x: number; y: number; w: number; h: number };
-function puzzleRects(W: number, H: number, n: number): Rect[] {
+export function puzzleRects(W: number, H: number, n: number): Rect[] {
   if (n >= 4) {
-    const w = W * 0.33, h = w * (4 / 3), gx = W * 0.05, gy = H * 0.035;
+    const w = W * 0.36, h = w * (4 / 3), gx = W * 0.04, gy = H * 0.03;
     const x0 = (W - w * 2 - gx) / 2, y0 = (H - h * 2 - gy) / 2;
     return [0, 1, 2, 3].map((i) => ({ x: x0 + (i % 2) * (w + gx), y: y0 + Math.floor(i / 2) * (h + gy), w, h }));
   }
-  const w = W * 0.56, h = w / 2, g = H * 0.06;
+  const w = W * 0.58, h = w / 2, g = H * 0.05;
   const y0 = (H - h * 3 - g * 2) / 2;
   return [0, 1, 2].map((i) => ({ x: (W - w) / 2, y: y0 + i * (h + g), w, h }));
 }
-function crayonDot(ctx: Ctx, x: number, y: number, r: number, color: string, seed: number) {
+
+/** 照片 0–1 坐标 → 画布坐标（与 cover 的裁切一致） */
+function coverMap(img: Img, r: Rect, cx: number, cy: number) {
+  const k = Math.max(r.w / img.width, r.h / img.height);
+  const sw = r.w / k, sh = r.h / k, sx = (img.width - sw) * cx, sy = (img.height - sh) * cy;
+  return (u: number, v: number): [number, number] => [r.x + (u * img.width - sx) * k, r.y + (v * img.height - sy) * k];
+}
+
+/** 动态模糊：沿略斜方向多次错位叠加取平均，再轻微高斯 */
+function motionBlurBg(ctx: Ctx, img: Img, W: number, H: number) {
+  const n = 18, step = W * 0.009;
+  ctx.save();
+  ctx.filter = `blur(${W * 0.006}px) saturate(1.08)`;
+  for (let i = 0; i < n; i++) {
+    const t = i - (n - 1) / 2;
+    ctx.globalAlpha = 1 / (i + 1);
+    cover(ctx, img, -W * 0.12 + t * step, -H * 0.06 + t * step * 0.18, W * 1.24, H * 1.12);
+  }
+  ctx.restore();
+  ctx.fillStyle = "rgba(0,0,0,0.08)";
+  ctx.fillRect(0, 0, W, H);
+}
+
+/** 蜡笔填色：底色半透 + 斜向排线 + 纸面露白 + 毛边描一圈 */
+function crayonFill(ctx: Ctx, path: Path2D, x: number, y: number, r: number, color: string, seed: number) {
   const R = rng(seed);
   ctx.save();
-  ctx.beginPath();
-  for (let i = 0; i <= 28; i++) {
-    const a = (i / 28) * Math.PI * 2, rr = r * (0.96 + R() * 0.07);
-    i ? ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr) : ctx.moveTo(x + rr, y);
-  }
-  ctx.closePath();
-  ctx.clip();
-  ctx.fillStyle = color;
-  ctx.globalAlpha = 0.72;
-  ctx.fill();
-  // 斜向蜡笔排线
-  ctx.strokeStyle = color;
-  ctx.lineWidth = Math.max(1.2, r * 0.09);
-  ctx.globalAlpha = 0.6;
-  for (let k = -r * 1.4; k < r * 1.4; k += r * 0.13) {
-    ctx.beginPath();
-    ctx.moveTo(x + k - r, y + r);
-    ctx.lineTo(x + k + r, y - r);
-    ctx.stroke();
-  }
-  // 纸面露白
-  ctx.globalAlpha = 0.35;
-  ctx.fillStyle = "rgba(255,255,255,0.8)";
-  for (let i = 0; i < r * 0.9; i++) ctx.fillRect(x + (R() - 0.5) * r * 2, y + (R() - 0.5) * r * 2, r * 0.05, r * 0.05);
-  ctx.restore();
-}
-function crayonShape(ctx: Ctx, fam: StickerFamily, x: number, y: number, r: number, color: string, seed: number) {
-  if (fam === "dot") return crayonDot(ctx, x, y, r, color, seed);
-  const R = rng(seed), pts: [number, number][] = [];
-  if (fam === "star") {
-    const spikes = 4 + Math.floor(R() * 3), rot = R() * Math.PI;
-    for (let i = 0; i <= spikes * 2; i++) {
-      const a = rot + (i / (spikes * 2)) * Math.PI * 2, rr = i % 2 ? r * 0.38 : r;
-      pts.push([x + Math.cos(a) * rr, y + Math.sin(a) * rr]);
-    }
-  } else {
-    for (let i = 0; i <= 30; i++) {
-      const t = (i / 30) * Math.PI * 2;
-      pts.push([x + (r / 17) * 16 * Math.sin(t) ** 3, y - (r / 17) * (13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t))]);
-    }
-  }
-  ctx.save();
-  ctx.beginPath();
-  pts.forEach(([a, b], i) => (i ? ctx.lineTo(a, b) : ctx.moveTo(a, b)));
-  ctx.closePath();
+  ctx.clip(path);
   ctx.fillStyle = color;
   ctx.globalAlpha = 0.78;
-  ctx.fill();
+  ctx.fill(path);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(1, r * 0.07);
+  ctx.globalAlpha = 0.7;
+  const ang = 0.6 + R() * 0.3;
+  for (let k = -r * 1.6; k < r * 1.6; k += r * 0.1) {
+    ctx.beginPath();
+    ctx.moveTo(x + k - r * ang * 1.5, y + r * 1.5);
+    ctx.lineTo(x + k + r * ang * 1.5, y - r * 1.5);
+    ctx.stroke();
+  }
+  ctx.fillStyle = "rgba(255,255,255,0.85)";
+  for (let i = 0; i < r * 1.6; i++) {
+    ctx.globalAlpha = 0.2 + R() * 0.35;
+    const s = r * (0.02 + R() * 0.05);
+    ctx.fillRect(x + (R() - 0.5) * r * 2.2, y + (R() - 0.5) * r * 2.2, s, s * (0.4 + R()));
+  }
   ctx.restore();
-  crayonStroke(ctx, pts, color, Math.max(2, r * 0.1), seed + 1);
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.globalAlpha = 0.55;
+  ctx.lineWidth = Math.max(1, r * 0.06);
+  ctx.stroke(path);
+  ctx.restore();
 }
+function polyPath(pts: [number, number][]) {
+  const p = new Path2D();
+  pts.forEach(([a, b], i) => (i ? p.lineTo(a, b) : p.moveTo(a, b)));
+  p.closePath();
+  return p;
+}
+
+/** 贴纸库：波点 / 星星 / 爱心 / 螺旋 / 四角火花 / 小花 / 烟花，族内造型有变化 */
+function sticker(ctx: Ctx, fam: StickerFamily, x: number, y: number, r: number, color: string, seed: number) {
+  const R = rng(seed);
+  const rot = (R() - 0.5) * 0.8;
+  const wob = (n: number, f: (a: number) => number) =>
+    Array.from({ length: n }, (_, i) => { const a = (i / n) * Math.PI * 2; const rr = f(a) * (0.97 + R() * 0.06); return [x + Math.cos(a + rot) * rr, y + Math.sin(a + rot) * rr] as [number, number]; });
+  switch (fam) {
+    case "dot":
+      return crayonFill(ctx, polyPath(wob(32, () => r)), x, y, r, color, seed);
+    case "star": {
+      const spikes = [5, 5, 6, 4][Math.floor(R() * 4)]!, inner = 0.4 + R() * 0.14, round = R() > 0.5;
+      const pts: [number, number][] = [];
+      for (let i = 0; i < spikes * 2; i++) {
+        const a = -Math.PI / 2 + rot + (i / (spikes * 2)) * Math.PI * 2, rr = (i % 2 ? r * inner : r) * (0.93 + R() * 0.1);
+        pts.push([x + Math.cos(a) * rr, y + Math.sin(a) * rr]);
+      }
+      if (!round) return crayonFill(ctx, polyPath(pts), x, y, r, color, seed);
+      const p = new Path2D();
+      pts.forEach(([a, b], i) => { const [na, nb] = pts[(i + 1) % pts.length]!; const mx = (a + na) / 2, my = (b + nb) / 2; i ? p.quadraticCurveTo(a, b, mx, my) : p.moveTo(mx, my); });
+      p.closePath();
+      return crayonFill(ctx, p, x, y, r, color, seed);
+    }
+    case "heart": {
+      const pts: [number, number][] = [];
+      const sx = 0.9 + R() * 0.2;
+      for (let i = 0; i < 40; i++) {
+        const t = (i / 40) * Math.PI * 2;
+        const hx = 16 * Math.sin(t) ** 3 * sx, hy = -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t));
+        const c = Math.cos(rot), s = Math.sin(rot);
+        pts.push([x + ((hx * c - hy * s) * r) / 17, y + ((hx * s + hy * c) * r) / 17]);
+      }
+      return crayonFill(ctx, polyPath(pts), x, y, r, color, seed);
+    }
+    case "flower": {
+      const petals = 5 + Math.floor(R() * 3);
+      const p = new Path2D();
+      for (let i = 0; i < petals; i++) {
+        const a = rot + (i / petals) * Math.PI * 2;
+        p.ellipse(x + Math.cos(a) * r * 0.55, y + Math.sin(a) * r * 0.55, r * 0.45, r * 0.32, a, 0, Math.PI * 2);
+      }
+      crayonFill(ctx, p, x, y, r, color, seed);
+      ctx.save(); ctx.globalAlpha = 0.9; ctx.fillStyle = "rgba(255,250,235,0.9)";
+      ctx.beginPath(); ctx.arc(x, y, r * 0.2, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+      return;
+    }
+    case "spark": {
+      // 类 Claude 的放射火花：粗细不一、圆头的放射短线
+      const rays = 8 + Math.floor(R() * 5);
+      const pts: [number, number][] = [];
+      for (let i = 0; i < rays; i++) {
+        const a = rot + (i / rays) * Math.PI * 2 + (R() - 0.5) * 0.2, len = r * (0.65 + R() * 0.4);
+        pts.push([x, y], [x + Math.cos(a) * len, y + Math.sin(a) * len]);
+      }
+      for (let i = 0; i < pts.length; i += 2) crayonStroke(ctx, [pts[i]!, pts[i + 1]!], color, r * (0.16 + R() * 0.08), seed + i);
+      return;
+    }
+    case "spiral": {
+      const turns = 2.2 + R() * 1.2, n = 60, pts: [number, number][] = [];
+      for (let i = 0; i <= n; i++) { const t = i / n, a = rot + t * turns * Math.PI * 2, rr = r * t; pts.push([x + Math.cos(a) * rr, y + Math.sin(a) * rr]); }
+      return crayonStroke(ctx, pts, color, r * 0.14, seed);
+    }
+    case "firework": {
+      const rays = 10 + Math.floor(R() * 6);
+      for (let i = 0; i < rays; i++) {
+        const a = rot + (i / rays) * Math.PI * 2, r0 = r * 0.25, r1 = r * (0.75 + R() * 0.25);
+        crayonStroke(ctx, [[x + Math.cos(a) * r0, y + Math.sin(a) * r0], [x + Math.cos(a) * r1, y + Math.sin(a) * r1]], color, r * 0.08, seed + i, i % 3 ? "solid" : "dash");
+        if (R() > 0.4) { ctx.save(); ctx.fillStyle = color; ctx.globalAlpha = 0.85; ctx.beginPath(); ctx.arc(x + Math.cos(a) * r1 * 1.15, y + Math.sin(a) * r1 * 1.15, r * 0.06, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+      }
+      return;
+    }
+  }
+}
+
 export function puzzleSticker(imgs: Img[], o: TemplateOptions) {
   const bg = avgColor(imgs[0]!);
-  return { family: o.sticker ?? autoSticker(bg), color: o.stickerColor ?? contrastCrayon(bg) };
+  return {
+    family: o.sticker ?? o.puzzleAI?.family ?? autoSticker(bg),
+    color: o.stickerColor ?? o.puzzleAI?.color ?? contrastCrayon(bg),
+  };
 }
+/** 每张照片的裁切中心：手动拖过 > AI 主体 > 居中 */
+export function puzzleCrop(o: TemplateOptions, i: number): [number, number] {
+  return o.pcrops[i] ?? o.puzzleAI?.photos[i]?.focus ?? [0.5, 0.5];
+}
+
 function drawPuzzle(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOptions) {
   const n = Math.min(imgs.length, 4);
-  ctx.save();
-  ctx.filter = `blur(${W * 0.04}px) saturate(1.1)`;
-  cover(ctx, imgs[0]!, -W * 0.08, -H * 0.08, W * 1.16, H * 1.16);
-  ctx.restore();
-  ctx.fillStyle = "rgba(0,0,0,0.12)";
-  ctx.fillRect(0, 0, W, H);
+  motionBlurBg(ctx, imgs[0]!, W, H);
+  grain(ctx, W, H, 0.07);
   const rects = puzzleRects(W, H, n);
-  rects.forEach((r, i) => cover(ctx, imgs[i]!, r.x, r.y, r.w, r.h, 0.5, 0.5));
-  grain(ctx, W, H, 0.3);
+  const maps = rects.map((r, i) => { const [cx, cy] = puzzleCrop(o, i); cover(ctx, imgs[i]!, r.x, r.y, r.w, r.h, cx, cy); return coverMap(imgs[i]!, r, cx, cy); });
   const { family, color } = puzzleSticker(imgs, o);
-  // 贴纸压在照片外角和接缝处，大小参差，避开照片中心（人脸多在这里）
+  // 避开区：AI 给的脸/主体框
+  const avoid: Rect[] = [];
+  rects.forEach((_, i) => o.puzzleAI?.photos[i]?.avoid.forEach(([ax, ay, aw, ah]) => {
+    const [x0, y0] = maps[i]!(ax, ay), [x1, y1] = maps[i]!(ax + aw, ay + ah);
+    avoid.push({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 });
+  }));
+  const hit = (x: number, y: number, s: number) => avoid.some((a) => x + s > a.x && x - s < a.x + a.w && y + s > a.y && y - s < a.y + a.h);
+  // 压在照片边缘和接缝上，大小参差（约 0.5×–2×），不跑远
   const R = rng(o.seed + 101);
-  const anchors: [number, number][] = [];
-  rects.forEach((r) => {
-    anchors.push([r.x, r.y], [r.x + r.w, r.y + r.h * (0.2 + R() * 0.6)], [r.x + r.w * (0.2 + R() * 0.6), r.y + r.h], [r.x, r.y + r.h * 0.7]);
-  });
-  const count = n >= 4 ? 18 : 14;
-  for (let i = 0; i < count; i++) {
-    const [ax, ay] = anchors[Math.floor(R() * anchors.length)]!;
-    const big = R() < 0.25;
-    const size = W * (big ? 0.035 + R() * 0.03 : 0.008 + R() * 0.018);
-    crayonShape(ctx, family, ax + (R() - 0.5) * W * 0.08, ay + (R() - 0.5) * W * 0.08, size, color, o.seed * 31 + i);
+  const count = n >= 4 ? 16 : 13;
+  const placed: [number, number, number][] = [];
+  for (let tries = 0; placed.length < count && tries < 400; tries++) {
+    const r = rects[Math.floor(R() * rects.length)]!;
+    const side = Math.floor(R() * 4), t = 0.08 + R() * 0.84;
+    let x = side === 0 ? r.x + r.w * t : side === 1 ? r.x + r.w : side === 2 ? r.x + r.w * t : r.x;
+    let y = side === 0 ? r.y : side === 1 ? r.y + r.h * t : side === 2 ? r.y + r.h : r.y + r.h * t;
+    x += (R() - 0.5) * W * 0.03; y += (R() - 0.5) * W * 0.03;
+    const big = R() < 0.3;
+    const s = W * (big ? 0.032 + R() * 0.03 : 0.01 + R() * 0.018);
+    if (hit(x, y, s)) continue;
+    if (placed.some(([px, py, ps]) => Math.hypot(px - x, py - y) < (ps + s) * 1.3)) continue;
+    placed.push([x, y, s]);
   }
+  placed.forEach(([x, y, s], i) => sticker(ctx, family, x, y, s, color, o.seed * 31 + i));
 }
 
 export const TEMPLATES: TemplateDef[] = [
@@ -360,5 +470,5 @@ export function recommendTemplate(count: number, category: CameraCategory | null
 export function defaultOptions(place: string | null = null): TemplateOptions {
   const d = new Date();
   const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  return { caption: place ?? "", date, frame: 0, format: "mini", crops: [0.5, 0.5], swap: false, sticker: null, stickerColor: null, seed: 1 };
+  return { caption: place ?? "", date, frame: 0, format: "mini", crops: [0.5, 0.5], swap: false, sticker: null, stickerColor: null, seed: 1, pcrops: [null, null, null, null], soloLines: null, puzzleAI: null };
 }
