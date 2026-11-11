@@ -1,12 +1,13 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ChevronLeft, Inbox, SplitSquareHorizontal } from "lucide-react";
+import { ChevronLeft, Download, Inbox, SplitSquareHorizontal } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AiMark, ApproxTag, ProMark } from "@/components/app/marks";
 import { ExposureDial, Ruler } from "@/components/darkroom/controls";
 import { usePhotoBase } from "@/hooks/use-photo-base";
 import { useApp } from "@/lib/app-state";
 import { getCamera, type PhotoStats, type Preset } from "@/lib/cameras";
-import { renderWithPreset } from "@/lib/render";
+import { EXPORT_EDGE, loadImage, renderWithPreset, scaleToCanvas } from "@/lib/render";
+import { saveCanvas } from "@/lib/templates/sources";
 import { cn } from "@/lib/utils";
 import { playEject } from "@/lib/sound";
 
@@ -148,6 +149,21 @@ function DarkroomPage() {
     navigate({ to: "/album" });
   };
 
+  // 轻路径：显影完直接用原图重新渲染并保存到手机
+  const [savingNow, setSavingNow] = useState(false);
+  const saveNow = async () => {
+    if (!photo || !preset) return;
+    setSavingNow(true);
+    try {
+      const img = await loadImage(photo.src);
+      const out = renderWithPreset(scaleToCanvas(img, EXPORT_EDGE), preset);
+      if ((await saveCanvas(out, `dazzlab-${Date.now()}.jpg`)) === "downloaded") showHint("已保存");
+    } catch {
+      showHint("保存失败，再试一次");
+    } finally {
+      setSavingNow(false);
+    }
+  };
   const onPaperDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (phase === "developing") return;
     moved.current = false;
@@ -236,15 +252,22 @@ function DarkroomPage() {
         </button>
       </div>
     );
-  const tip = developing ? "点一下照片跳过" : phase === "done" ? "把照片拖进成品台，或直接点成品台" : isInstant ? "拖动照片调整裁剪 · 点照片看细节" : "点照片看细节 · 调好后按显影";
+  const tip = developing ? "点一下照片跳过" : phase === "done" ? "已收进相册 · 可直接保存，或去相册做成品" : isInstant ? "拖动照片调整裁剪 · 点照片看细节" : "点照片看细节 · 调好后按显影";
   const devRow = (
     <div className="relative z-10 flex shrink-0 items-center gap-2 py-2">
       {devButton}
-      <div ref={trayRef} onClick={phase === "done" ? goResult : () => showHint("先显影，再把照片拖进成品台")} role="button" aria-label="成品台"
+      {phase === "done" && (
+        <button type="button" onClick={saveNow} disabled={savingNow} aria-label="保存到手机"
+          className="flex size-11 shrink-0 flex-col items-center justify-center rounded-xl border border-hairline bg-background/40 text-foreground disabled:opacity-60">
+          <Download className="size-4" />
+          <span className="text-[8px]">保存</span>
+        </button>
+      )}
+      <div ref={trayRef} onClick={phase === "done" ? goResult : () => showHint("先显影，照片会收进相册")} role="button" aria-label="相册"
         className={cn("flex size-11 shrink-0 flex-col items-center justify-center rounded-xl border transition-all",
           overTray ? "scale-125 border-primary bg-primary/15 text-primary" : phase === "done" ? "anim-tray border-primary/70 bg-primary/10 text-primary" : "border-hairline bg-background/40 text-muted-foreground")}>
         <Inbox className="size-4" />
-        <span className="text-[8px]">成品台</span>
+        <span className="text-[8px]">相册</span>
       </div>
     </div>
   );

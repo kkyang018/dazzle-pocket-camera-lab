@@ -1,25 +1,28 @@
 import type { CameraCategory } from "@/lib/cameras";
-import {
-  FONTS, cover, fit, grain, inkStamp, noShadow, paper, rng, softShadow, sparkle, star, tape, withRot, wrap,
-  type Ctx, type Img,
-} from "./draw";
+import { FONTS, cover, grain, rng, type Ctx, type Img } from "./draw";
 
-export type TemplateId = "halfframe" | "polaroid" | "solo" | "blur" | "travel";
+export type TemplateId = "solo" | "halfframe" | "polaroid" | "puzzle";
+export type StickerFamily = "dot" | "star" | "heart";
+export type PolaroidFormat = "mini" | "square" | "wide";
 
 export type TemplateOptions = {
-  /** 打字机文字 / 标题 */
+  /** 拍立得：地点那一行 */
   caption: string;
-  /** 手写文字 */
-  note: string;
   /** YYYY-MM-DD */
   date: string;
-  /** 底纸配色序号 */
-  paper: number;
+  /** 拍立得相纸：0 白边 1 黑边 */
+  frame: number;
+  format: PolaroidFormat;
+  /** 半格：两张照片的横向裁切位置 0–1 */
+  crops: [number, number];
+  /** 半格：左右互换 */
   swap: boolean;
-  edge: boolean;
-  filmName: string;
-  /** 每张照片自己的地点（多张拍立得用） */
-  places?: (string | null)[];
+  /** 拼图贴纸族；null = 按照片自动选 */
+  sticker: StickerFamily | null;
+  /** 贴纸颜色；null = 按照片自动配 */
+  stickerColor: string | null;
+  /** 贴纸/手绘线随机排布 */
+  seed: number;
 };
 
 export type TemplateDef = {
@@ -29,337 +32,317 @@ export type TemplateDef = {
   min: number;
   max: number;
   pro?: boolean;
-  /** 基准尺寸（预览 1x） */
-  size: [number, number];
-  papers?: { label: string; color: string }[];
-  fields: ("caption" | "note" | "date" | "paper" | "swap" | "edge")[];
+  ai?: boolean;
+  /** 只有拍立得相机拍的照片能用 */
+  instantOnly?: boolean;
+  size: (o: TemplateOptions) => [number, number];
   draw: (ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOptions) => void;
 };
 
 const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
-/** 2026-09-14 → "14 SEP 2026" */
+/** 2026-11-11 → "11 NOV 2026" */
 export function stampText(date: string) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
   if (!m) return date.toUpperCase();
   return `${Number(m[3])} ${MONTHS[Number(m[2]) - 1] ?? ""} ${m[1]}`;
 }
-/** 2026-09-14 → "'26 9 14"（半格机身日期） */
-function filmDate(date: string) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
-  return m ? `'${m[1]!.slice(2)} ${Number(m[2])} ${Number(m[3])}` : date;
+
+// ── 颜色工具：从照片取色，供"看图配色"用 ─────────────────────────
+type RGB = [number, number, number];
+export function avgColor(img: Img): RGB {
+  const c = document.createElement("canvas");
+  c.width = c.height = 24;
+  const g = c.getContext("2d")!;
+  g.drawImage(img, 0, 0, 24, 24);
+  const d = g.getImageData(0, 0, 24, 24).data;
+  let r = 0, gg = 0, b = 0;
+  for (let i = 0; i < d.length; i += 4) { r += d[i]!; gg += d[i + 1]!; b += d[i + 2]!; }
+  const n = d.length / 4;
+  return [r / n, gg / n, b / n];
+}
+const hex = ([r, g, b]: RGB) => "#" + [r, g, b].map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, "0")).join("");
+const mix = (a: RGB, b: RGB, t: number): RGB => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+
+/** 背景主色 → 有对比但温润的蜡笔色 */
+export function contrastCrayon([r, g, b]: RGB): string {
+  if (b >= r && b >= g) return "#E9D18B"; // 蓝紫暮色 → 黄油黄
+  if (g > r && g >= b) return "#F2A38B"; // 绿色 → 珊瑚粉
+  if (r + g + b < 200) return "#F3E3B5"; // 很暗 → 奶油
+  return "#9CC7E0"; // 暖色 → 雾蓝
+}
+/** 自动选贴纸族：暗夜用星星，暖调人像感用爱心，其他用波点 */
+export function autoSticker([r, g, b]: RGB): StickerFamily {
+  const lum = (r * 0.3 + g * 0.59 + b * 0.11) / 255;
+  if (lum < 0.28) return "star";
+  return "dot";
 }
 
-// ── ① 半格胶片：两张竖图挤进一格 35mm ───────────────────────────
-function drawHalf(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOptions) {
-  const u = W / 1500;
-  ctx.fillStyle = "#0b0b0a";
-  ctx.fillRect(0, 0, W, H);
-  const pad = o.edge ? 70 * u : 0, padY = o.edge ? 110 * u : 0, gap = 44 * u;
-  const fw = (W - pad * 2 - gap) / 2, fh = H - padY * 2;
-  const pair = o.swap ? [imgs[1]!, imgs[0]!] : [imgs[0]!, imgs[1]!];
-  pair.forEach((img, i) => {
-    const x = pad + i * (fw + gap);
-    cover(ctx, img, x, padY, fw, fh);
-    // 画框边缘微暗，像曝光边
-    const g = ctx.createLinearGradient(x, 0, x + fw, 0);
-    g.addColorStop(0, "rgba(0,0,0,0.25)");
-    g.addColorStop(0.06, "rgba(0,0,0,0)");
-    g.addColorStop(0.94, "rgba(0,0,0,0)");
-    g.addColorStop(1, "rgba(0,0,0,0.25)");
-    ctx.fillStyle = g;
-    ctx.fillRect(x, padY, fw, fh);
-  });
-  // 中缝的暗绿色片基
-  ctx.fillStyle = "#121a14";
-  ctx.fillRect(pad + fw, padY, gap, fh);
-  if (o.edge) {
-    ctx.fillStyle = "rgba(232,146,58,0.78)";
-    ctx.font = `500 ${26 * u}px ${FONTS.mono}`;
-    ctx.textBaseline = "middle";
-    const label = (o.filmName || "DAZZ 400").toUpperCase();
-    ctx.fillText(`${label}   ▸ 24`, pad, padY / 2);
-    ctx.fillText("▸ 24A", pad + fw + gap, padY / 2);
-    ctx.textAlign = "right";
-    ctx.fillText("DAZZ LAB · HALF", W - pad, padY / 2);
-    ctx.textAlign = "left";
-    ctx.fillText(`25   ▸ 25A   ${label}`, pad, H - padY / 2);
-    // 片孔
-    ctx.fillStyle = "#1d1d1b";
-    for (let x = pad * 0.4; x < W; x += 66 * u) {
-      ctx.fillRect(x, padY * 0.1, 30 * u, padY * 0.18);
-      ctx.fillRect(x, H - padY * 0.28, 30 * u, padY * 0.18);
-    }
-  }
-  // 机身打印日期
+// ── 蜡笔笔触 ─────────────────────────────────────────────────────
+function crayonStroke(ctx: Ctx, pts: [number, number][], color: string, w: number, seed: number, dash: "solid" | "dash" | "dot" = "solid") {
+  const r = rng(seed);
   ctx.save();
-  ctx.font = `${30 * u}px ${FONTS.mono}`;
-  ctx.fillStyle = "#ff8a3a";
-  ctx.shadowColor = "#ff6a1a";
-  ctx.shadowBlur = 8 * u;
-  ctx.textAlign = "right";
-  ctx.fillText(filmDate(o.date), W - pad - 30 * u, H - padY - 30 * u);
-  ctx.restore();
-  grain(ctx, W, H, 0.22);
-}
-
-// ── ② 拍立得手记：干净相纸 + 居中炭灰日期章 + 打字机地点 ──────────
-const CHARCOAL = "#3a3836";
-function stampWidth(ctx: Ctx, text: string, size: number) {
-  ctx.save();
-  ctx.font = `500 ${size}px "Special Elite", "IBM Plex Mono", monospace`;
-  let w = 0;
-  for (const ch of text) w += ctx.measureText(ch).width + size * 0.06;
-  ctx.restore();
-  return w;
-}
-function polaroidCard(ctx: Ctx, img: Img, cx: number, cy: number, w: number, deg: number, o: TemplateOptions, u: number, seed: number, big: boolean, caption = o.caption) {
-  const m = w * 0.06, iw = w - m * 2, bottom = w * 0.26;
-  const h = m + iw + bottom;
-  withRot(ctx, cx, cy, deg, () => {
-    const x = cx - w / 2, y = cy - h / 2;
-    softShadow(ctx, u, 0.45);
-    ctx.fillStyle = "#fcfbf8";
-    ctx.fillRect(x, y, w, h);
-    noShadow(ctx);
-    ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  if (dash === "dash") ctx.setLineDash([w * 3.2, w * 2.4]);
+  if (dash === "dot") ctx.setLineDash([0.1, w * 2.2]);
+  for (let pass = 0; pass < 3; pass++) {
+    ctx.globalAlpha = pass === 0 ? 0.85 : 0.35;
+    ctx.lineWidth = w * (pass === 0 ? 1 : 0.55);
     ctx.beginPath();
-    ctx.rect(x, y, w, h);
-    ctx.clip();
-    ctx.strokeStyle = "rgba(120,110,95,0.05)";
-    ctx.lineWidth = 1 * u;
-    for (let k = -h; k < w; k += 5 * u) {
-      ctx.beginPath();
-      ctx.moveTo(x + k, y);
-      ctx.lineTo(x + k + h, y + h);
-      ctx.stroke();
-    }
-    ctx.restore();
-    cover(ctx, img, x + m, y + m, iw, iw);
-    ctx.strokeStyle = "rgba(0,0,0,0.1)";
-    ctx.lineWidth = 2 * u;
-    ctx.strokeRect(x + m, y + m, iw, iw);
-    const by = y + m + iw;
-    if (caption) {
-      ctx.fillStyle = CHARCOAL;
-      ctx.font = `${w * (big ? 0.05 : 0.058)}px ${FONTS.type}`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(wrap(ctx, caption, iw * 0.9)[0] ?? "", cx, by + bottom * 0.4);
-      ctx.textAlign = "left";
-      ctx.textBaseline = "alphabetic";
-    }
-    const ts = w * (big ? 0.036 : 0.044), text = stampText(o.date);
-    inkStamp(ctx, text, cx - stampWidth(ctx, text, ts) / 2, by + bottom * (caption ? 0.74 : 0.55), ts, CHARCOAL, 0, seed);
-  });
-}
-
-function drawPolaroid(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOptions) {
-  const u = W / 1080;
-  ctx.fillStyle = "#efeeeb";
-  ctx.fillRect(0, 0, W, H);
-  const n = imgs.length;
-  if (n === 1) polaroidCard(ctx, imgs[0]!, W / 2, H / 2, 820 * u, 0, o, u, 21, true);
-  else {
-    const slots: [number, number][] =
-      n === 2 ? [[540, 400], [540, 1060]] :
-      n === 3 ? [[290, 450], [790, 450], [540, 1030]] :
-      [[290, 430], [790, 430], [290, 1010], [790, 1010]];
-    const w = n === 2 ? 470 * u : 450 * u;
-    slots.forEach(([x, y], i) => polaroidCard(ctx, imgs[i]!, x * u, y * u, w, 0, o, u, 31 + i, false, i === 0 ? o.caption : (o.places?.[i] ?? "")));
-  }
-}
-
-// ── ③ 文艺单张：展览画册式留白 + 衬线标题 + 展签信息 ──────────────
-const SOLO_PAPERS = [
-  { label: "画册白", color: "#f4f2ed", ink: "#1f1d1a", accent: "#b23a26" },
-  { label: "灰墨", color: "#2b2a28", ink: "#ece8de", accent: "#e8923a" },
-  { label: "燕麦", color: "#e6dccb", ink: "#2c261e", accent: "#7a4a2a" },
-];
-function drawSolo(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOptions) {
-  const u = W / 1080;
-  const p = SOLO_PAPERS[o.paper] ?? SOLO_PAPERS[0]!;
-  paper(ctx, W, H, p.color, 17, 0.025);
-  const r = fit(imgs[0]!, 130 * u, 190 * u, 820 * u, 860 * u);
-  ctx.drawImage(imgs[0]!, r.x, r.y, r.w, r.h);
-  const L = 130 * u, R = W - 130 * u;
-  ctx.fillStyle = p.ink;
-  ctx.textBaseline = "alphabetic";
-  // 页眉
-  ctx.font = `500 ${20 * u}px ${FONTS.mono}`;
-  ctx.globalAlpha = 0.6;
-  ctx.fillText("DAZZ LAB — PLATE Nº 01", L, 120 * u);
-  ctx.textAlign = "right";
-  ctx.fillText(stampText(o.date), R, 120 * u);
-  ctx.textAlign = "left";
-  ctx.globalAlpha = 1;
-  // 标题（地点/文字）
-  const ty = Math.max(r.y + r.h + 120 * u, 1170 * u);
-  ctx.font = `700 ${64 * u}px ${FONTS.serif}`;
-  ctx.fillText(wrap(ctx, o.caption || "无题", R - L)[0] ?? "", L, ty);
-  ctx.fillStyle = p.accent;
-  ctx.fillRect(L, ty + 30 * u, 56 * u, 4 * u);
-  // 短句
-  ctx.fillStyle = p.ink;
-  ctx.globalAlpha = 0.75;
-  ctx.font = `${28 * u}px ${FONTS.serif}`;
-  wrap(ctx, o.note || "光线落下来的时候，什么都不用说。", R - L).slice(0, 2).forEach((l, i) => ctx.fillText(l, L, ty + 90 * u + i * 42 * u));
-  ctx.globalAlpha = 0.5;
-  ctx.font = `500 ${18 * u}px ${FONTS.mono}`;
-  ctx.textAlign = "right";
-  ctx.fillText("GELATIN SILVER PRINT", R, H - 70 * u);
-  ctx.textAlign = "left";
-  ctx.globalAlpha = 1;
-  grain(ctx, W, H, o.paper === 1 ? 0.14 : 0.06);
-}
-
-// ── ④ 动态景深：横向流动的背景 + 白边前景照片 + 胶片光晕 ───────────
-function drawBlur(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOptions) {
-  const u = W / 1080;
-  const bg = imgs[o.swap && imgs.length > 1 ? imgs.length - 1 : 0]!;
-  ctx.fillStyle = "#111";
-  ctx.fillRect(0, 0, W, H);
-  ctx.save();
-  ctx.filter = `blur(${22 * u}px) saturate(1.25)`;
-  for (let i = 0; i < 14; i++) {
-    ctx.globalAlpha = i === 0 ? 1 : 0.12;
-    cover(ctx, bg, -200 * u + i * 30 * u, -60 * u, W + 400 * u, H + 120 * u);
+    pts.forEach(([x, y], i) => {
+      const jx = x + (r() - 0.5) * w * 0.5, jy = y + (r() - 0.5) * w * 0.5;
+      if (i === 0) ctx.moveTo(jx, jy);
+      else {
+        const [px, py] = pts[i - 1]!;
+        ctx.quadraticCurveTo(px, py, (px + jx) / 2, (py + jy) / 2);
+      }
+    });
+    ctx.stroke();
   }
   ctx.restore();
-  const v = ctx.createLinearGradient(0, 0, 0, H);
-  v.addColorStop(0, "rgba(0,0,0,0.35)");
-  v.addColorStop(0.5, "rgba(0,0,0,0.05)");
-  v.addColorStop(1, "rgba(0,0,0,0.55)");
-  ctx.fillStyle = v;
+}
+const arc = (cx: number, cy: number, rx: number, ry: number, a0: number, a1: number, n = 18): [number, number][] =>
+  Array.from({ length: n + 1 }, (_, i) => { const a = a0 + ((a1 - a0) * i) / n; return [cx + Math.cos(a) * rx, cy + Math.sin(a) * ry]; });
+
+// ── ① 手绘单张：原比例小照片 + 看图配色的手绘细线 ─────────────────
+function drawSolo(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOptions) {
+  const u = W / 1080, img = imgs[0]!;
+  const base = avgColor(img);
+  const lum = (base[0] * 0.3 + base[1] * 0.59 + base[2] * 0.11) / 255;
+  ctx.fillStyle = hex(mix(base, [250, 247, 236], 0.86));
   ctx.fillRect(0, 0, W, H);
-  // 漏光
-  const leak = ctx.createRadialGradient(W, 0, 0, W, 0, W * 0.9);
-  leak.addColorStop(0, "rgba(255,120,40,0.35)");
-  leak.addColorStop(1, "rgba(255,120,40,0)");
-  ctx.fillStyle = leak;
-  ctx.fillRect(0, 0, W, H);
-  const fg = imgs.length > 1 ? imgs.filter((x) => x !== bg) : imgs;
-  const n = fg.length;
-  const layouts: [number, number, number, number][][] = [
-    [[540, 640, 640, 0]],
-    [[400, 520, 500, -3], [680, 860, 500, 2.5]],
-    [[330, 430, 420, -4], [740, 640, 420, 3], [420, 980, 420, -1.5]],
-  ];
-  (layouts[Math.min(n, 3) - 1] ?? layouts[0]!).forEach(([x, y, w, d], i) => {
-    const img = fg[i]!;
-    const h = (w * img.height) / img.width > w * 1.35 ? w * 1.35 : (w * img.height) / img.width;
-    const b = 14 * u;
-    withRot(ctx, x * u, y * u, d, () => {
-      softShadow(ctx, u, 0.9);
-      ctx.fillStyle = "#f7f5f0";
-      ctx.fillRect(x * u - w * u / 2 - b, y * u - h * u / 2 - b, w * u + b * 2, h * u + b * 2);
-      noShadow(ctx);
-      cover(ctx, img, x * u - w * u / 2, y * u - h * u / 2, w * u, h * u);
-    });
-  });
-  ctx.fillStyle = "#f6f2e8";
-  ctx.font = `500 ${22 * u}px ${FONTS.mono}`;
-  ctx.globalAlpha = 0.85;
-  ctx.fillText("● REC  " + filmDate(o.date), 70 * u, 100 * u);
-  ctx.globalAlpha = 1;
-  if (o.caption) {
-    ctx.font = `700 ${58 * u}px ${FONTS.serif}`;
-    ctx.fillText(wrap(ctx, o.caption, W - 140 * u)[0] ?? "", 70 * u, H - 110 * u);
+  // 照片保持原比例，约占画面 52% 宽（竖图收窄）
+  const ar = img.width / img.height;
+  let pw = W * (ar >= 1 ? 0.56 : 0.46), ph = pw / ar;
+  if (ph > H * 0.5) { ph = H * 0.5; pw = ph * ar; }
+  const px = (W - pw) / 2, py = (H - ph) / 2;
+  ctx.drawImage(img, px, py, pw, ph);
+  // 三色：取照片色加深/提亮，线条有实线、虚线、点线
+  const night = lum < 0.35, cool = base[2] > base[0];
+  const c1 = hex(mix(base, night ? [240, 200, 120] : [214, 120, 70], 0.7));
+  const c2 = hex(mix(base, cool ? [80, 120, 170] : [120, 150, 90], 0.65));
+  const c3 = hex(mix(base, [200, 110, 130], 0.6));
+  const w = 5 * u, R = rng(o.seed + 11);
+  const L = px, T = py, Rt = px + pw, B = py + ph;
+  // 沿照片边的穿插弧线
+  crayonStroke(ctx, arc(L + pw * 0.12, T, pw * 0.28, ph * 0.22, Math.PI * 0.9, Math.PI * 1.9), c1, w, o.seed + 1);
+  crayonStroke(ctx, arc(Rt, B - ph * 0.2, pw * 0.16, ph * 0.3, -Math.PI * 0.4, Math.PI * 0.6), c2, w * 0.8, o.seed + 2, "dash");
+  crayonStroke(ctx, [[L - 40 * u, B - 30 * u], [L + pw * 0.2, B + 50 * u], [L + pw * 0.5, B + 30 * u], [L + pw * 0.75, B + 70 * u]], c3, w * 0.7, o.seed + 3, "dot");
+  // 主题符号
+  const sx = Rt - pw * 0.06, sy = T - 10 * u;
+  if (night) {
+    crayonStroke(ctx, arc(sx, sy, 46 * u, 46 * u, Math.PI * 0.6, Math.PI * 2.2), c1, w, o.seed + 4);
+    crayonStroke(ctx, arc(sx + 18 * u, sy - 10 * u, 38 * u, 38 * u, Math.PI * 0.7, Math.PI * 2.1), c1, w * 0.6, o.seed + 5);
+    for (let i = 0; i < 4; i++) {
+      const x = L - 20 * u + R() * pw * 0.4, y = B + 80 * u + R() * 60 * u, s = (10 + R() * 12) * u;
+      crayonStroke(ctx, [[x - s, y], [x + s, y]], c3, w * 0.7, o.seed + 20 + i);
+      crayonStroke(ctx, [[x, y - s], [x, y + s]], c3, w * 0.7, o.seed + 30 + i);
+    }
+  } else if (cool) {
+    // 云 + 飞鸟
+    const cy = T - 40 * u, cx = L + pw * 0.62;
+    crayonStroke(ctx, [...arc(cx, cy, 34 * u, 28 * u, Math.PI, Math.PI * 2), ...arc(cx + 56 * u, cy - 6 * u, 30 * u, 34 * u, Math.PI, Math.PI * 2), ...arc(cx + 100 * u, cy + 6 * u, 24 * u, 22 * u, Math.PI * 1.1, Math.PI * 2.4)], c2, w, o.seed + 6);
+    for (let i = 0; i < 3; i++) {
+      const x = L + 30 * u + i * 60 * u, y = T - 90 * u + i * 18 * u, s = 18 * u;
+      crayonStroke(ctx, [[x - s, y], [x - s * 0.3, y + s * 0.5], [x, y], [x + s * 0.4, y + s * 0.5], [x + s, y]], c3, w * 0.7, o.seed + 40 + i);
+    }
+  } else {
+    // 太阳 + 叶子
+    crayonStroke(ctx, arc(sx, sy, 34 * u, 34 * u, 0, Math.PI * 2), c1, w, o.seed + 7);
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      crayonStroke(ctx, [[sx + Math.cos(a) * 50 * u, sy + Math.sin(a) * 50 * u], [sx + Math.cos(a) * 72 * u, sy + Math.sin(a) * 72 * u]], c1, w * 0.7, o.seed + 50 + i);
+    }
+    const lx = L - 10 * u, ly = B - ph * 0.35;
+    crayonStroke(ctx, [[lx + 30 * u, ly - 60 * u], [lx - 20 * u, ly], [lx - 40 * u, ly + 90 * u]], c2, w * 0.8, o.seed + 8);
+    for (let i = 0; i < 3; i++) {
+      const y = ly - 30 * u + i * 45 * u, x = lx - 12 * u - i * 8 * u;
+      crayonStroke(ctx, arc(x - 26 * u, y, 24 * u, 11 * u, 0, Math.PI * 2, 14), c2, w * 0.6, o.seed + 60 + i);
+    }
   }
-  ctx.font = `500 ${20 * u}px ${FONTS.mono}`;
-  ctx.globalAlpha = 0.7;
-  ctx.fillText("IN MOTION · DAZZ LAB", 70 * u, H - 64 * u);
-  ctx.globalAlpha = 1;
+  grain(ctx, W, H, 0.08);
+}
+
+// ── ② 半格胶片：两张竖裁并排、满版、黑分隔条、轻颗粒偏暖 ───────────
+function drawHalf(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOptions) {
+  const gap = W * 0.022;
+  ctx.fillStyle = "#0a0a09";
+  ctx.fillRect(0, 0, W, H);
+  const fw = (W - gap) / 2;
+  const pair = o.swap ? [imgs[1]!, imgs[0]!] : [imgs[0]!, imgs[1]!];
+  const crops = o.swap ? [o.crops[1], o.crops[0]] : o.crops;
+  pair.forEach((img, i) => cover(ctx, img, i * (fw + gap), 0, fw, H, crops[i]));
+  ctx.save();
+  ctx.globalCompositeOperation = "soft-light";
+  ctx.fillStyle = "rgba(255,170,90,0.22)";
+  ctx.fillRect(0, 0, W, H);
+  ctx.restore();
+  ctx.fillStyle = "#0a0a09";
+  ctx.fillRect(fw, 0, gap, H);
   grain(ctx, W, H, 0.2);
 }
 
-// ── ⑤ 旅行画报：深色底纸 + 错落照片 + 胶带 + 白色手绘 ─────────────
-const TRAVEL_PAPERS = [
-  { label: "深海蓝", color: "#174a82" },
-  { label: "米白", color: "#f1ece1" },
-  { label: "墨绿", color: "#2d4a3a" },
-];
-function drawTravel(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOptions) {
-  const u = W / 1080;
-  const p = TRAVEL_PAPERS[o.paper] ?? TRAVEL_PAPERS[0]!;
-  const light = o.paper === 1;
-  const ink = light ? "#1d3f74" : "#f7f4ea";
-  paper(ctx, W, H, p.color, 23, 0.06);
-  const n = imgs.length;
-  const slots: [number, number, number, number, number][] =
-    n === 1 ? [[120, 300, 840, 700, -2]] :
-    n === 2 ? [[90, 150, 600, 450, -2], [380, 760, 620, 465, 2.5]] :
-    [[90, 110, 520, 390, -2.5], [280, 560, 560, 400, 1.5], [440, 1000, 540, 360, -1.5]];
-  slots.forEach(([x, y, w, h, d], i) => {
-    const img = imgs[i]!;
-    withRot(ctx, (x + w / 2) * u, (y + h / 2) * u, d, () => {
-      softShadow(ctx, u, 0.8);
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(x * u, y * u, w * u, h * u);
-      noShadow(ctx);
-      cover(ctx, img, x * u, y * u, w * u, h * u);
-    });
-  });
-  const [s0, s1] = [slots[0]!, slots[1] ?? slots[0]!];
-  tape(ctx, (s1[0] + s1[2] * 0.5) * u, s1[1] * u, 180 * u, 70 * u, -4, "gingham", u);
-  // 牛皮纸星星邮票
-  [[s0[0] - 20, s0[1] - 30, -6], [s0[0] + 60, s0[1] - 10, 8], [s0[0] + 20, s0[1] + 50, -3]].slice(0, 3).forEach(([x, y, d], i) =>
-    withRot(ctx, x! * u, y! * u, d!, () => {
-      ctx.fillStyle = i === 0 ? "#efe9de" : "#e6c9a6";
-      softShadow(ctx, u, 0.4);
-      ctx.fillRect(x! * u - 34 * u, y! * u - 34 * u, 68 * u, 68 * u);
-      noShadow(ctx);
-      star(ctx, x! * u, y! * u, 22 * u, "#2a2018", 300 + i, i === 0 ? "#2a2018" : undefined, 0.12);
-    }));
-  // 白色手绘：虚线 + 星
-  ctx.save();
-  ctx.strokeStyle = ink;
-  ctx.lineWidth = 4 * u;
-  ctx.setLineDash([2 * u, 18 * u]);
-  ctx.lineCap = "round";
-  const lx = s0[0] * u + 60 * u, ly = (s0[1] + s0[3]) * u + 40 * u;
-  ctx.beginPath();
-  ctx.moveTo(lx, ly);
-  ctx.bezierCurveTo(lx + 40 * u, ly + 120 * u, lx + 160 * u, ly + 40 * u, lx + 230 * u, ly + 110 * u);
-  ctx.stroke();
-  ctx.restore();
-  star(ctx, lx, ly, 40 * u, ink, 401);
-  star(ctx, lx + 250 * u, ly + 120 * u, 26 * u, ink, 402);
-  sparkle(ctx, (s0[0] + s0[2]) * u - 70 * u, (s0[1] + s0[3]) * u - 90 * u, 60 * u, ink, 403, 12);
-  // 手写段落
-  const text = o.note || "When we arrived at the sea, the whole summer was right in front of us.";
-  ctx.fillStyle = ink;
-  ctx.font = `700 ${46 * u}px ${FONTS.script}`;
-  const tx = n === 1 ? 140 * u : n === 2 ? 730 * u : 640 * u, ty = n === 1 ? 1130 * u : n === 2 ? 210 * u : 150 * u;
-  const tw = n === 1 ? 800 * u : n === 2 ? 300 * u : 380 * u;
-  wrap(ctx, text, tw).slice(0, n === 1 ? 3 : 6).forEach((l, i) => ctx.fillText(l, tx, ty + i * 54 * u));
-  // 浅色标签框 + 打字机说明
-  if (o.caption) {
-    ctx.font = `${30 * u}px ${FONTS.type}`;
-    const lines = wrap(ctx, o.caption, 340 * u).slice(0, 3);
-    const bx = n === 3 ? 640 * u : 80 * u, by = n === 1 ? 160 * u : H - 300 * u;
-    ctx.fillStyle = light ? "#1d3f74" : "#9ad9ec";
-    ctx.fillRect(bx, by, 380 * u, (lines.length * 42 + 40) * u);
-    ctx.fillStyle = light ? "#f1ece1" : "#123150";
-    lines.forEach((l, i) => ctx.fillText(l, bx + 20 * u, by + 54 * u + i * 42 * u));
+// ── ③ 拍立得：干净相纸，底边居中日期章 + 地点 ──────────────────────
+const POLAROID: Record<PolaroidFormat, { card: [number, number]; img: [number, number, number, number] }> = {
+  // card 尺寸；照片 x,y,w,h（真实相纸比例放大）
+  mini: { card: [1080, 1720], img: [80, 100, 920, 1240] },
+  square: { card: [1080, 1290], img: [75, 90, 930, 930] },
+  wide: { card: [1620, 1290], img: [67, 90, 1486, 930] },
+};
+function drawPolaroid(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOptions) {
+  const spec = POLAROID[o.format];
+  const s = W / spec.card[0];
+  const dark = o.frame === 1;
+  ctx.fillStyle = dark ? "#151413" : "#f8f6f1";
+  ctx.fillRect(0, 0, W, H);
+  const [x, y, w, h] = spec.img.map((v) => v * s) as [number, number, number, number];
+  cover(ctx, imgs[0]!, x, y, w, h);
+  ctx.strokeStyle = dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.08)";
+  ctx.lineWidth = 2 * s;
+  ctx.strokeRect(x, y, w, h);
+  const top = y + h, bottom = H - top;
+  const base = Math.min(bottom * 0.17, 54 * s);
+  ctx.fillStyle = dark ? "#d8d3c8" : "#3a3836";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `${base}px ${FONTS.type}`;
+  const letter = (t: string, cy: number, size: number) => {
+    // 打字机字：字距稍松，每个字轻微浓淡
+    ctx.font = `${size}px ${FONTS.type}`;
+    const sp = size * 0.12;
+    const chars = [...t];
+    const total = chars.reduce((a, ch) => a + ctx.measureText(ch).width + sp, -sp);
+    let cx = W / 2 - total / 2;
+    const r = rng(t.length * 7 + 3);
+    ctx.textAlign = "left";
+    chars.forEach((ch) => { ctx.globalAlpha = 0.82 + r() * 0.18; ctx.fillText(ch, cx, cy); cx += ctx.measureText(ch).width + sp; });
+    ctx.globalAlpha = 1;
+  };
+  const hasPlace = !!o.caption.trim();
+  const mid = top + bottom * 0.5;
+  letter(stampText(o.date), hasPlace ? mid - base * 0.75 : mid, base);
+  if (hasPlace) letter(o.caption.trim().toUpperCase(), mid + base * 0.85, base * 0.82);
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+}
+
+// ── ④ 规则拼图：模糊照片底 + 颗粒 + 单族蜡笔贴纸压在照片边缘 ─────────
+type Rect = { x: number; y: number; w: number; h: number };
+function puzzleRects(W: number, H: number, n: number): Rect[] {
+  if (n >= 4) {
+    const w = W * 0.33, h = w * (4 / 3), gx = W * 0.05, gy = H * 0.035;
+    const x0 = (W - w * 2 - gx) / 2, y0 = (H - h * 2 - gy) / 2;
+    return [0, 1, 2, 3].map((i) => ({ x: x0 + (i % 2) * (w + gx), y: y0 + Math.floor(i / 2) * (h + gy), w, h }));
   }
-  grain(ctx, W, H, 0.14);
+  const w = W * 0.56, h = w / 2, g = H * 0.06;
+  const y0 = (H - h * 3 - g * 2) / 2;
+  return [0, 1, 2].map((i) => ({ x: (W - w) / 2, y: y0 + i * (h + g), w, h }));
+}
+function crayonDot(ctx: Ctx, x: number, y: number, r: number, color: string, seed: number) {
+  const R = rng(seed);
+  ctx.save();
+  ctx.beginPath();
+  for (let i = 0; i <= 28; i++) {
+    const a = (i / 28) * Math.PI * 2, rr = r * (0.96 + R() * 0.07);
+    i ? ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr) : ctx.moveTo(x + rr, y);
+  }
+  ctx.closePath();
+  ctx.clip();
+  ctx.fillStyle = color;
+  ctx.globalAlpha = 0.72;
+  ctx.fill();
+  // 斜向蜡笔排线
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(1.2, r * 0.09);
+  ctx.globalAlpha = 0.6;
+  for (let k = -r * 1.4; k < r * 1.4; k += r * 0.13) {
+    ctx.beginPath();
+    ctx.moveTo(x + k - r, y + r);
+    ctx.lineTo(x + k + r, y - r);
+    ctx.stroke();
+  }
+  // 纸面露白
+  ctx.globalAlpha = 0.35;
+  ctx.fillStyle = "rgba(255,255,255,0.8)";
+  for (let i = 0; i < r * 0.9; i++) ctx.fillRect(x + (R() - 0.5) * r * 2, y + (R() - 0.5) * r * 2, r * 0.05, r * 0.05);
+  ctx.restore();
+}
+function crayonShape(ctx: Ctx, fam: StickerFamily, x: number, y: number, r: number, color: string, seed: number) {
+  if (fam === "dot") return crayonDot(ctx, x, y, r, color, seed);
+  const R = rng(seed), pts: [number, number][] = [];
+  if (fam === "star") {
+    const spikes = 4 + Math.floor(R() * 3), rot = R() * Math.PI;
+    for (let i = 0; i <= spikes * 2; i++) {
+      const a = rot + (i / (spikes * 2)) * Math.PI * 2, rr = i % 2 ? r * 0.38 : r;
+      pts.push([x + Math.cos(a) * rr, y + Math.sin(a) * rr]);
+    }
+  } else {
+    for (let i = 0; i <= 30; i++) {
+      const t = (i / 30) * Math.PI * 2;
+      pts.push([x + (r / 17) * 16 * Math.sin(t) ** 3, y - (r / 17) * (13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t))]);
+    }
+  }
+  ctx.save();
+  ctx.beginPath();
+  pts.forEach(([a, b], i) => (i ? ctx.lineTo(a, b) : ctx.moveTo(a, b)));
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.globalAlpha = 0.78;
+  ctx.fill();
+  ctx.restore();
+  crayonStroke(ctx, pts, color, Math.max(2, r * 0.1), seed + 1);
+}
+export function puzzleSticker(imgs: Img[], o: TemplateOptions) {
+  const bg = avgColor(imgs[0]!);
+  return { family: o.sticker ?? autoSticker(bg), color: o.stickerColor ?? contrastCrayon(bg) };
+}
+function drawPuzzle(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOptions) {
+  const n = Math.min(imgs.length, 4);
+  ctx.save();
+  ctx.filter = `blur(${W * 0.04}px) saturate(1.1)`;
+  cover(ctx, imgs[0]!, -W * 0.08, -H * 0.08, W * 1.16, H * 1.16);
+  ctx.restore();
+  ctx.fillStyle = "rgba(0,0,0,0.12)";
+  ctx.fillRect(0, 0, W, H);
+  const rects = puzzleRects(W, H, n);
+  rects.forEach((r, i) => cover(ctx, imgs[i]!, r.x, r.y, r.w, r.h, 0.5, 0.5));
+  grain(ctx, W, H, 0.3);
+  const { family, color } = puzzleSticker(imgs, o);
+  // 贴纸压在照片外角和接缝处，大小参差，避开照片中心（人脸多在这里）
+  const R = rng(o.seed + 101);
+  const anchors: [number, number][] = [];
+  rects.forEach((r) => {
+    anchors.push([r.x, r.y], [r.x + r.w, r.y + r.h * (0.2 + R() * 0.6)], [r.x + r.w * (0.2 + R() * 0.6), r.y + r.h], [r.x, r.y + r.h * 0.7]);
+  });
+  const count = n >= 4 ? 18 : 14;
+  for (let i = 0; i < count; i++) {
+    const [ax, ay] = anchors[Math.floor(R() * anchors.length)]!;
+    const big = R() < 0.25;
+    const size = W * (big ? 0.035 + R() * 0.03 : 0.008 + R() * 0.018);
+    crayonShape(ctx, family, ax + (R() - 0.5) * W * 0.08, ay + (R() - 0.5) * W * 0.08, size, color, o.seed * 31 + i);
+  }
 }
 
 export const TEMPLATES: TemplateDef[] = [
-  { id: "halfframe", name: "半格胶片", en: "Half-Frame", min: 2, max: 2, size: [1500, 1040], fields: ["edge", "swap", "date"], draw: drawHalf },
-  { id: "polaroid", name: "拍立得手记", en: "Polaroid", min: 1, max: 4, size: [1080, 1440], fields: ["caption", "date"], draw: drawPolaroid },
-  { id: "solo", name: "文艺单张", en: "Solo Print", min: 1, max: 1, size: [1080, 1440], fields: ["caption", "note", "paper"], papers: SOLO_PAPERS, draw: drawSolo },
-  { id: "blur", name: "动态景深", en: "Motion Blur", min: 1, max: 3, pro: true, size: [1080, 1440], fields: ["caption", "swap"], draw: drawBlur },
-  { id: "travel", name: "旅行画报", en: "Travel Zine", min: 1, max: 3, pro: true, size: [1080, 1440], fields: ["note", "caption", "paper"], papers: TRAVEL_PAPERS, draw: drawTravel },
+  { id: "solo", name: "手绘单张", en: "Hand-drawn", min: 1, max: 1, ai: true, size: () => [1080, 1440], draw: drawSolo },
+  { id: "halfframe", name: "半格胶片", en: "Half-Frame", min: 2, max: 2, size: () => [1500, 1040], draw: drawHalf },
+  { id: "polaroid", name: "拍立得", en: "Polaroid", min: 1, max: 1, instantOnly: true, size: (o) => POLAROID[o.format].card, draw: drawPolaroid },
+  { id: "puzzle", name: "拼图贴纸", en: "Collage", min: 3, max: 4, pro: true, size: () => [1080, 1440], draw: drawPuzzle },
 ];
 
 export function getTemplate(id: TemplateId) {
   return TEMPLATES.find((t) => t.id === id)!;
 }
 
-/** 选 N 张时该模板能不能用 */
-export function usable(t: TemplateDef, count: number) {
-  return count >= t.min;
+/** 这组照片能不能用该模板；不能用时返回原因 */
+export function blockReason(t: TemplateDef, categories: (CameraCategory | null)[]): string | null {
+  if (categories.length < t.min) return `需要 ${t.min} 张照片`;
+  if (t.instantOnly && categories[0] !== "instant") return "只有拍立得相机拍的照片能做";
+  return null;
+}
+export function usable(t: TemplateDef, categories: (CameraCategory | null)[]) {
+  return blockReason(t, categories) === null;
 }
 
 /** 模板实际用几张（多出来的取前几张） */
@@ -369,16 +352,13 @@ export function takeCount(t: TemplateDef, count: number) {
 
 /** 按张数和相机类型推荐模板 */
 export function recommendTemplate(count: number, category: CameraCategory | null): TemplateId {
+  if (count >= 3) return "puzzle";
   if (count === 2) return "halfframe";
-  if (count >= 4) return "polaroid";
-  if (count === 3) return category === "film" ? "travel" : "blur";
-  if (category === "instant") return "polaroid";
-  if (category === "ccd") return "blur";
-  return "solo";
+  return category === "instant" ? "polaroid" : "solo";
 }
 
-export function defaultOptions(filmName: string | null, place: string | null = null): TemplateOptions {
+export function defaultOptions(place: string | null = null): TemplateOptions {
   const d = new Date();
   const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  return { caption: place ?? "", note: "", date, paper: 0, swap: false, edge: true, filmName: filmName ?? "DAZZ 400" };
+  return { caption: place ?? "", date, frame: 0, format: "mini", crops: [0.5, 0.5], swap: false, sticker: null, stickerColor: null, seed: 1 };
 }

@@ -13,7 +13,7 @@ export const Route = createFileRoute("/album")({
   head: () => ({
     meta: [
       { title: "相册 · Dazz Lab" },
-      { name: "description", content: "陈列所有显影好的照片，选 1–4 张做成胶片、拍立得或画报成品。" },
+      { name: "description", content: "陈列所有显影好的照片，选 1–4 张做成手绘单张、半格、拍立得或拼图成品。" },
       { property: "og:title", content: "相册 · Dazz Lab" },
       { property: "og:description", content: "陈列所有显影好的照片，选 1–4 张做成成品。" },
       { property: "og:type", content: "website" },
