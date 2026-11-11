@@ -11,7 +11,7 @@ export function developed(item: AlbumItem, edge: number = PREVIEW_EDGE, bare = f
   if (!p) {
     p = loadImage(item.photo.src).then((img) => {
       const base = scaleToCanvas(img, edge);
-      const look = item.look && bare ? { ...item.look, frame: undefined } : item.look;
+      const look = item.look && bare ? (({ frame: _f, ...rest }) => rest)(item.look) : item.look;
       return look ? renderWithPreset(base, look) : base;
     });
     if (edge === PREVIEW_EDGE) cache.set(key, p);
