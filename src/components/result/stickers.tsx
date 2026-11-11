@@ -24,7 +24,7 @@ export const STICKERS: Record<string, Def> = {
 export const STICKER_KEYS = Object.keys(STICKERS);
 
 export function Sticker({ id, className }: { id: string; className?: string }) {
-  const d = STICKERS[id] ?? STICKERS.star!;
+  const d = STICKERS[id] ?? STICKERS['star']!;
   return (
     <svg viewBox="0 0 48 48" className={className} aria-label={d.name} role="img">
       {d.svg}
