@@ -1,4 +1,4 @@
-import type { Preset } from "@/lib/cameras";
+import type { CameraCategory, Preset } from "@/lib/cameras";
 import {
   createContext,
   useCallback,
@@ -27,6 +27,21 @@ type AppState = {
   look: Preset | null;
   setLook: (p: Preset | null) => void;
   togglePin: (id: string) => boolean;
+  /** 相册：暗房显影后的照片 + 样片，只在内存里 */
+  album: AlbumItem[];
+  addToAlbum: (item: Omit<AlbumItem, "id">) => number;
+  /** 相册里选中、要做成成品的照片 id（按选择顺序） */
+  selection: number[];
+  setSelection: (ids: number[]) => void;
+};
+
+export type AlbumItem = {
+  id: number;
+  photo: Photo;
+  /** 显影效果；样片为 null（原样） */
+  look: Preset | null;
+  cameraName: string | null;
+  category: CameraCategory | null;
 };
 
 export type HintKind = "pro" | "info";
@@ -48,6 +63,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [cameraId, setCameraId] = useState<string | null>(null);
   const [pinned, setPinned] = useState<string[]>([]);
   const [look, setLook] = useState<Preset | null>(null);
+  const [album, setAlbum] = useState<AlbumItem[]>([]);
+  const [selection, setSelection] = useState<number[]>([]);
+  const albumSrcs = useRef(new Set<string>());
+  const nextId = useRef(1);
   const pinnedRef = useRef<string[]>([]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const photoRef = useRef<Photo | null>(null);
@@ -59,9 +78,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setPhoto = useCallback((p: Photo | null) => {
-    if (photoRef.current && photoRef.current.src !== p?.src) release(photoRef.current);
+    // 已归档到相册的照片还在用，不能释放
+    if (photoRef.current && photoRef.current.src !== p?.src && !albumSrcs.current.has(photoRef.current.src)) release(photoRef.current);
     photoRef.current = p;
     setPhotoState(p);
+  }, []);
+
+  const addToAlbum = useCallback((item: Omit<AlbumItem, "id">) => {
+    const id = nextId.current++;
+    albumSrcs.current.add(item.photo.src);
+    setAlbum((a) => [{ ...item, id }, ...a]);
+    return id;
   }, []);
 
   const togglePin = useCallback((id: string) => {
@@ -94,6 +121,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         togglePin,
         look,
         setLook,
+        album,
+        addToAlbum,
+        selection,
+        setSelection,
       }}>
       {children}
     </AppContext.Provider>

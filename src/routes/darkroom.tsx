@@ -49,7 +49,7 @@ export const Route = createFileRoute("/darkroom")({
 });
 
 function DarkroomPage() {
-  const { photo, cameraId, quietMode, setLook, showHint } = useApp();
+  const { photo, cameraId, quietMode, setLook, showHint, addToAlbum, setSelection } = useApp();
   const navigate = useNavigate();
   const camera = getCamera(cameraId);
   const base = usePhotoBase(photo);
@@ -141,7 +141,11 @@ function DarkroomPage() {
   };
   const goResult = () => {
     setLook(preset);
-    navigate({ to: "/result" });
+    if (photo && camera) {
+      const id = addToAlbum({ photo, look: preset, cameraName: camera.name, category: camera.category });
+      setSelection([id]);
+    }
+    navigate({ to: "/album" });
   };
 
   const onPaperDown = (e: React.PointerEvent<HTMLDivElement>) => {
