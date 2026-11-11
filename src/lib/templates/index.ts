@@ -151,7 +151,7 @@ function drawPolaroid(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOp
     tape(ctx, W / 2 + 10 * u, H * 0.47 - 520 * u, 230 * u, 64 * u, 3, "clear", u);
   } else {
     const slots: [number, number, number][] =
-      n === 2 ? [[300, 690, -3], [780, 760, 2.5]] :
+      n === 2 ? [[300, 720, -3], [780, 800, 2.5]] :
       n === 3 ? [[300, 470, -3], [780, 520, 2.5], [540, 1050, -1]] :
       [[290, 460, -3], [790, 500, 2.4], [300, 1030, 1.8], [790, 1060, -2.2]];
     slots.forEach(([x, y, d], i) => polaroidCard(ctx, imgs[i]!, x * u, y * u + (n === 4 ? 40 * u : 0), 440 * u, d, o, u, 31 + i, false));
@@ -164,8 +164,8 @@ function drawPolaroid(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOp
     ctx.fillStyle = "#c8572a";
     ctx.fillText(o.note ? wrap(ctx, o.note, W * 0.8)[0]! : "", W / 2, H - 50 * u);
     ctx.textAlign = "left";
-    star(ctx, 120 * u, 110 * u, 36 * u, "#c8572a", 4);
-    sparkle(ctx, W - 130 * u, 120 * u, 40 * u, "#c8572a", 8);
+    star(ctx, 150 * u, 215 * u, 30 * u, "#c8572a", 4);
+    sparkle(ctx, W - 150 * u, 220 * u, 36 * u, "#c8572a", 8);
   }
   if (n === 1 && o.note) {
     ctx.fillStyle = "#3a332c";
@@ -334,13 +334,13 @@ function drawTravel(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOpti
   ctx.restore();
   star(ctx, lx, ly, 40 * u, ink, 401);
   star(ctx, lx + 250 * u, ly + 120 * u, 26 * u, ink, 402);
-  sparkle(ctx, (s0[0] + s0[2]) * u - 70 * u, s0[1] * u + 130 * u, 70 * u, ink, 403, 12);
+  sparkle(ctx, (s0[0] + s0[2]) * u - 70 * u, (s0[1] + s0[3]) * u - 90 * u, 60 * u, ink, 403, 12);
   // 手写段落
   const text = o.note || "When we arrived at the sea, the whole summer was right in front of us.";
   ctx.fillStyle = ink;
   ctx.font = `700 ${46 * u}px ${FONTS.script}`;
-  const tx = n === 1 ? 140 * u : 640 * u, ty = n === 1 ? 1130 * u : n === 2 ? 210 * u : 150 * u;
-  const tw = n === 1 ? 800 * u : 380 * u;
+  const tx = n === 1 ? 140 * u : n === 2 ? 730 * u : 640 * u, ty = n === 1 ? 1130 * u : n === 2 ? 210 * u : 150 * u;
+  const tw = n === 1 ? 800 * u : n === 2 ? 300 * u : 380 * u;
   wrap(ctx, text, tw).slice(0, n === 1 ? 3 : 6).forEach((l, i) => ctx.fillText(l, tx, ty + i * 54 * u));
   // 浅色标签框 + 打字机说明
   if (o.caption) {

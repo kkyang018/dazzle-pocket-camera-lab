@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ImagePlus, Loader2 } from "lucide-react";
 import { LocalProcessingNote } from "@/components/app/local-note";
 import { useApp } from "@/lib/app-state";
@@ -63,7 +63,7 @@ function LabPage() {
             <span className="animate-blink size-1.5 rounded-full bg-primary" aria-hidden />
             Darkroom
           </span>
-          <span>Step 01</span>
+          <Link to="/album" className="rounded-full border border-hairline px-2.5 py-1 text-foreground">相册 ›</Link>
         </div>
         <h1 className="mt-6 font-serif text-[40px] leading-none font-black tracking-tight">Dazz Lab</h1>
         <p className="mt-3 text-sm text-muted-foreground">选一张照片，再挑一台相机冲洗它。</p>

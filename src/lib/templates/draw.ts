@@ -76,10 +76,10 @@ export function paper(ctx: Ctx, W: number, H: number, color: string, seed = 5, f
   ctx.fillRect(0, 0, W, H);
   const r = rng(seed);
   ctx.save();
-  for (let i = 0; i < 260; i++) {
+  for (let i = 0; i < 1400; i++) {
     ctx.globalAlpha = fiber * r();
     ctx.fillStyle = r() > 0.5 ? "#fff" : "#000";
-    const x = r() * W, y = r() * H, s = (W / 1080) * (2 + r() * 40);
+    const x = r() * W, y = r() * H, s = (W / 1080) * (0.6 + r() * r() * 7);
     ctx.beginPath();
     ctx.ellipse(x, y, s, s * (0.2 + r()), r() * 3, 0, Math.PI * 2);
     ctx.fill();

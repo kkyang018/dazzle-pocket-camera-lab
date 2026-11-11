@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AlbumRouteImport } from './routes/album'
 import { Route as CamerasRouteImport } from './routes/cameras'
 import { Route as DarkroomRouteImport } from './routes/darkroom'
 import { Route as MeRouteImport } from './routes/me'
@@ -18,6 +19,11 @@ import { Route as ResultRouteImport } from './routes/result'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AlbumRoute = AlbumRouteImport.update({
+  id: '/album',
+  path: '/album',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CamerasRoute = CamerasRouteImport.update({
@@ -43,6 +49,7 @@ const ResultRoute = ResultRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/album': typeof AlbumRoute
   '/cameras': typeof CamerasRoute
   '/darkroom': typeof DarkroomRoute
   '/me': typeof MeRoute
@@ -50,6 +57,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/album': typeof AlbumRoute
   '/cameras': typeof CamerasRoute
   '/darkroom': typeof DarkroomRoute
   '/me': typeof MeRoute
@@ -58,6 +66,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/album': typeof AlbumRoute
   '/cameras': typeof CamerasRoute
   '/darkroom': typeof DarkroomRoute
   '/me': typeof MeRoute
@@ -65,14 +74,15 @@ export interface FileRoutesById {
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/cameras' | '/darkroom' | '/me' | '/result'
+  fullPaths: '/' | '/album' | '/cameras' | '/darkroom' | '/me' | '/result'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/cameras' | '/darkroom' | '/me' | '/result'
-  id: '__root__' | '/' | '/cameras' | '/darkroom' | '/me' | '/result'
+  to: '/' | '/album' | '/cameras' | '/darkroom' | '/me' | '/result'
+  id: '__root__' | '/' | '/album' | '/cameras' | '/darkroom' | '/me' | '/result'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AlbumRoute: typeof AlbumRoute
   CamerasRoute: typeof CamerasRoute
   DarkroomRoute: typeof DarkroomRoute
   MeRoute: typeof MeRoute
@@ -86,6 +96,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/album': {
+      id: '/album'
+      path: '/album'
+      fullPath: '/album'
+      preLoaderRoute: typeof AlbumRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/cameras': {
@@ -121,6 +138,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AlbumRoute: AlbumRoute,
   CamerasRoute: CamerasRoute,
   DarkroomRoute: DarkroomRoute,
   MeRoute: MeRoute,

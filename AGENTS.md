@@ -38,3 +38,4 @@ use the editor.
 - Client deps used by UI code are listed in `optimizeDeps.include` in `vite.config.ts`; add new runtime UI packages there so dev never re-optimizes mid-session and loads two React copies.
 - Darkroom adjustments are folded into one `Preset` (incl. sharpen/crop) and stored as `look` in AppProvider so the result page re-renders the same look.
 - Darkroom sizes the photo canvas from a ResizeObserver on the paper area (explicit CSS width/height), so any aspect ratio fits without pushing the header/controls off screen.
+- Album (`album`/`selection` in AppProvider) feeds the result page; each finished-photo template is one canvas `draw` in `src/lib/templates/index.ts`, used for both live preview and full-size export so they never diverge.
