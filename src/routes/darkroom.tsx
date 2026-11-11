@@ -252,7 +252,7 @@ function DarkroomPage() {
         </button>
       </div>
     );
-  const tip = developing ? "点一下照片跳过" : phase === "done" ? "已收进相册 · 可直接保存，或去相册做成品" : isInstant ? "拖动照片调整裁剪 · 点照片看细节" : "点照片看细节 · 调好后按显影";
+  const tip = developing ? "点一下照片跳过" : phase === "done" ? "已收进印样台 · 可直接保存，或去印样台做成品" : isInstant ? "拖动照片调整裁剪 · 点照片看细节" : "点照片看细节 · 调好后按显影";
   const devRow = (
     <div className="relative z-10 flex shrink-0 items-center gap-2 py-2">
       {devButton}
@@ -263,11 +263,11 @@ function DarkroomPage() {
           <span className="text-[8px]">保存</span>
         </button>
       )}
-      <div ref={trayRef} onClick={phase === "done" ? goResult : () => showHint("先显影，照片会收进相册")} role="button" aria-label="相册"
+      <div ref={trayRef} onClick={phase === "done" ? goResult : () => showHint("先显影，照片会收进印样台")} role="button" aria-label="印样台"
         className={cn("flex size-11 shrink-0 flex-col items-center justify-center rounded-xl border transition-all",
           overTray ? "scale-125 border-primary bg-primary/15 text-primary" : phase === "done" ? "anim-tray border-primary/70 bg-primary/10 text-primary" : "border-hairline bg-background/40 text-muted-foreground")}>
         <Inbox className="size-4" />
-        <span className="text-[8px]">相册</span>
+        <span className="text-[8px]">印样台</span>
       </div>
     </div>
   );

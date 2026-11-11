@@ -53,6 +53,13 @@ function ResultPage() {
   const rec = recommendTemplate(items.length, lead?.category ?? null);
   const [tid, setTid] = useState<TemplateId>(rec);
   const [opts, setOpts] = useState<TemplateOptions>(() => defaultOptions(lead?.place ?? null));
+  // 拍立得：相纸尺寸和边框跟随拍摄的相机，成品台只盖日期和地点两个章
+  const paper = lead?.look?.frame;
+  useEffect(() => {
+    if (!paper) return;
+    const dark = (() => { const m = /^#?(\w\w)(\w\w)(\w\w)/.exec(paper.color); return m ? parseInt(m[1]!, 16) + parseInt(m[2]!, 16) + parseInt(m[3]!, 16) < 300 : false; })();
+    setOpts((o) => ({ ...o, format: paper.kind, frame: dark ? 1 : 0 }));
+  }, [paper?.kind, paper?.color]);
   useEffect(() => { if (lead?.place) setOpts((o) => (o.caption ? o : { ...o, caption: lead.place! })); }, [lead?.place]);
   const [imgs, setImgs] = useState<HTMLCanvasElement[] | null>(null);
   const [saving, setSaving] = useState(false);
@@ -179,7 +186,7 @@ function ResultPage() {
     <main className="theme-paper flex min-h-[calc(100dvh-4rem)] flex-col px-4 pt-[max(env(safe-area-inset-top),1rem)] pb-6">
       <header className="flex items-center justify-between">
         <Link to="/album" className="-ml-2 flex items-center gap-0.5 px-2 py-1 font-mono text-[11px] text-muted-foreground">
-          <ChevronLeft className="size-4" /> 相册
+          <ChevronLeft className="size-4" /> 印样台
         </Link>
         <h1 className="font-serif text-lg font-bold">成品</h1>
         <span className="w-12 text-right font-mono text-[10px] text-muted-foreground">{items.length} 张</span>
@@ -188,7 +195,7 @@ function ResultPage() {
       {!items.length ? (
         <div className="mt-24 text-center">
           <p className="font-serif">还没有选照片</p>
-          <Link to="/album" className="mt-4 inline-block rounded-full bg-primary px-5 py-2.5 text-sm text-primary-foreground">去相册选择</Link>
+          <Link to="/album" className="mt-4 inline-block rounded-full bg-primary px-5 py-2.5 text-sm text-primary-foreground">去印样台选片</Link>
         </div>
       ) : (
         <>
@@ -230,7 +237,7 @@ function ResultPage() {
             )}
             <div className="mt-2 flex items-center justify-between">
               <p className="font-mono text-[10px] text-muted-foreground">
-                {t.id === "halfframe" ? "左右拖动照片调整裁切 · 竖拍效果更好" : t.id === "puzzle" ? "拖动每张照片调整取景" : n < items.length ? `只用前 ${n} 张` : t.en}
+                {t.id === "halfframe" ? "左右拖动照片调整裁切 · 竖拍效果更好" : t.id === "puzzle" ? "拖动每张照片调整取景" : t.en}
                 {t.id === rec && " · AI 推荐"}
               </p>
               {items.some((i) => i.photo.origin === "album") && <ApproxTag />}
@@ -254,12 +261,7 @@ function ResultPage() {
             )}
             {t.id === "polaroid" && (
               <>
-                <Field label="相纸尺寸">
-                  <div className="flex gap-2">{FORMATS.map((f) => <button key={f.id} type="button" onClick={() => set("format", f.id)} className={chip(opts.format === f.id)}>{f.label}</button>)}</div>
-                </Field>
-                <Field label="边框">
-                  <div className="flex gap-2">{["白边", "黑边"].map((l, i) => <button key={l} type="button" onClick={() => set("frame", i)} className={chip(opts.frame === i)}>{l}</button>)}</div>
-                </Field>
+                <p className="font-mono text-[10px] text-muted-foreground">{FORMATS.find((f) => f.id === opts.format)?.label} 相纸 · {opts.frame ? "黑边" : "白边"} · 跟随拍摄的相机</p>
                 <Field label="日期印章">
                   <div className="flex items-center gap-2">
                     <input type="date" value={opts.date} onChange={(e) => e.target.value && set("date", e.target.value)} className="bg-transparent font-mono text-[13px] outline-none" />
@@ -299,7 +301,7 @@ function ResultPage() {
             className="mt-4 flex items-center justify-center gap-2 rounded-full bg-primary py-3 font-medium text-primary-foreground disabled:opacity-60">
             {saving && <Loader2 className="size-4 animate-spin" />}保存到相册
           </button>
-          <Link to="/album" className="mt-2 text-center text-[12px] text-muted-foreground underline-offset-2 hover:underline">回相册再做一张</Link>
+          <Link to="/album" className="mt-2 text-center text-[12px] text-muted-foreground underline-offset-2 hover:underline">回印样台再做一张</Link>
           <p className="mt-2 text-center font-mono text-[10px] text-muted-foreground">用原图重新渲染 · JPG · 只在本机处理</p>
         </>
       )}

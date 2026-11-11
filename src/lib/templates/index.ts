@@ -80,8 +80,8 @@ export function contrastCrayon([r, g, b]: RGB): string {
 /** 自动选贴纸族：暗夜用星星，暖调人像感用爱心，其他用波点 */
 export function autoSticker([r, g, b]: RGB): StickerFamily {
   const lum = (r * 0.3 + g * 0.59 + b * 0.11) / 255;
-  if (lum < 0.28) return "star";
-  return "dot";
+  void lum;
+  return "star"; // 参考样张：柔和黄油黄蜡笔星星
 }
 
 // ── 蜡笔笔触 ─────────────────────────────────────────────────────
@@ -181,7 +181,7 @@ function drawSolo(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOption
 
 // ── ② 半格胶片：两张竖裁并排、满版、黑分隔条、轻颗粒偏暖 ───────────
 function drawHalf(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOptions) {
-  const gap = W * 0.022;
+  const gap = W * 0.045;
   ctx.fillStyle = "#0a0a09";
   ctx.fillRect(0, 0, W, H);
   const fw = (W - gap) / 2;
@@ -283,11 +283,11 @@ function crayonFill(ctx: Ctx, path: Path2D, x: number, y: number, r: number, col
   ctx.save();
   ctx.clip(path);
   ctx.fillStyle = color;
-  ctx.globalAlpha = 0.78;
+  ctx.globalAlpha = 0.95;
   ctx.fill(path);
-  ctx.strokeStyle = color;
-  ctx.lineWidth = Math.max(1, r * 0.07);
-  ctx.globalAlpha = 0.7;
+  ctx.strokeStyle = "rgba(255,255,255,0.18)";
+  ctx.lineWidth = Math.max(1, r * 0.03);
+  ctx.globalAlpha = 0.5;
   const ang = 0.6 + R() * 0.3;
   for (let k = -r * 1.6; k < r * 1.6; k += r * 0.1) {
     ctx.beginPath();
@@ -296,16 +296,18 @@ function crayonFill(ctx: Ctx, path: Path2D, x: number, y: number, r: number, col
     ctx.stroke();
   }
   ctx.fillStyle = "rgba(255,255,255,0.85)";
-  for (let i = 0; i < r * 1.6; i++) {
-    ctx.globalAlpha = 0.2 + R() * 0.35;
+  for (let i = 0; i < r * 0.8; i++) {
+    ctx.globalAlpha = 0.1 + R() * 0.2;
     const s = r * (0.02 + R() * 0.05);
     ctx.fillRect(x + (R() - 0.5) * r * 2.2, y + (R() - 0.5) * r * 2.2, s, s * (0.4 + R()));
   }
   ctx.restore();
   ctx.save();
   ctx.strokeStyle = color;
-  ctx.globalAlpha = 0.55;
-  ctx.lineWidth = Math.max(1, r * 0.06);
+  ctx.globalAlpha = 0.95;
+  ctx.lineJoin = "round";
+  ctx.lineWidth = Math.max(1, r * 0.14);
+  ctx.fillStyle = color;
   ctx.stroke(path);
   ctx.restore();
 }
@@ -326,10 +328,13 @@ function sticker(ctx: Ctx, fam: StickerFamily, x: number, y: number, r: number, 
     case "dot":
       return crayonFill(ctx, polyPath(wob(32, () => r)), x, y, r, color, seed);
     case "star": {
-      const spikes = [5, 5, 6, 4][Math.floor(R() * 4)]!, inner = 0.4 + R() * 0.14, round = R() > 0.5;
+      // 参考样张：多数是胖胖的五角星（臂长不一、偶有一条长尾），偶尔一颗八角星芒
+      const spikes = R() < 0.18 ? 8 : 5, inner = spikes === 8 ? 0.42 : 0.46 + R() * 0.08, round = false;
+      const tail = R() < 0.3 ? Math.floor(R() * spikes) : -1;
       const pts: [number, number][] = [];
       for (let i = 0; i < spikes * 2; i++) {
-        const a = -Math.PI / 2 + rot + (i / (spikes * 2)) * Math.PI * 2, rr = (i % 2 ? r * inner : r) * (0.93 + R() * 0.1);
+        const a = -Math.PI / 2 + rot + (i / (spikes * 2)) * Math.PI * 2 + (R() - 0.5) * 0.12;
+        const rr = i % 2 ? r * inner * (0.9 + R() * 0.2) : r * (i / 2 === tail ? 1.45 : 0.85 + R() * 0.3);
         pts.push([x + Math.cos(a) * rr, y + Math.sin(a) * rr]);
       }
       if (!round) return crayonFill(ctx, polyPath(pts), x, y, r, color, seed);
@@ -392,7 +397,7 @@ function sticker(ctx: Ctx, fam: StickerFamily, x: number, y: number, r: number, 
 export function puzzleSticker(imgs: Img[], o: TemplateOptions) {
   const bg = avgColor(imgs[0]!);
   return {
-    family: o.sticker ?? o.puzzleAI?.family ?? autoSticker(bg),
+    family: o.sticker ?? autoSticker(bg),
     color: o.stickerColor ?? o.puzzleAI?.color ?? contrastCrayon(bg),
   };
 }
@@ -417,18 +422,17 @@ function drawPuzzle(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOpti
   const hit = (x: number, y: number, s: number) => avoid.some((a) => x + s > a.x && x - s < a.x + a.w && y + s > a.y && y - s < a.y + a.h);
   // 压在照片边缘和接缝上，大小参差（约 0.5×–2×），不跑远
   const R = rng(o.seed + 101);
-  const count = n >= 4 ? 16 : 13;
+  const count = n >= 4 ? 7 : 6;
   const placed: [number, number, number][] = [];
   for (let tries = 0; placed.length < count && tries < 400; tries++) {
     const r = rects[Math.floor(R() * rects.length)]!;
-    const side = Math.floor(R() * 4), t = 0.08 + R() * 0.84;
+    const side = Math.floor(R() * 4), t = R() < 0.6 ? (R() < 0.5 ? 0.04 + R() * 0.12 : 0.84 + R() * 0.12) : 0.2 + R() * 0.6;
     let x = side === 0 ? r.x + r.w * t : side === 1 ? r.x + r.w : side === 2 ? r.x + r.w * t : r.x;
     let y = side === 0 ? r.y : side === 1 ? r.y + r.h * t : side === 2 ? r.y + r.h : r.y + r.h * t;
     x += (R() - 0.5) * W * 0.03; y += (R() - 0.5) * W * 0.03;
-    const big = R() < 0.3;
-    const s = W * (big ? 0.04 + R() * 0.035 : 0.016 + R() * 0.02);
+    const s = W * (0.03 + R() * 0.03);
     if (hit(x, y, s)) continue;
-    if (placed.some(([px, py, ps]) => Math.hypot(px - x, py - y) < (ps + s) * 1.3)) continue;
+    if (placed.some(([px, py, ps]) => Math.hypot(px - x, py - y) < (ps + s) * 2.2)) continue;
     placed.push([x, y, s]);
   }
   placed.forEach(([x, y, s], i) => sticker(ctx, family, x, y, s, color, o.seed * 31 + i));
@@ -447,7 +451,7 @@ export function getTemplate(id: TemplateId) {
 
 /** 这组照片能不能用该模板；不能用时返回原因 */
 export function blockReason(t: TemplateDef, categories: (CameraCategory | null)[]): string | null {
-  if (categories.length < t.min) return `需要 ${t.min} 张照片`;
+  if (categories.length < t.min || categories.length > t.max) return `需要选 ${t.min === t.max ? t.min : `${t.min}–${t.max}`} 张`;
   if (t.instantOnly && categories[0] !== "instant") return "只有拍立得相机拍的照片能做";
   return null;
 }
