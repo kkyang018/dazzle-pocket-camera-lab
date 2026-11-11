@@ -28,6 +28,8 @@ export type TemplateOptions = {
   pcrops: ([number, number] | null)[];
   /** 手绘单张：AI 看图配的线；null = 本地备用画法，"pending" = 等待中只画照片 */
   soloLines: SoloStroke[] | null | "pending";
+  /** 手绘单张：AI 生图画好的透明手绘线层（与画布同比例），优先于 soloLines */
+  soloDoodle: Img | null;
   /** 拼图：AI 选的贴纸族/配色/主体位置 */
   puzzleAI: PuzzleAI | null;
 };
@@ -113,18 +115,27 @@ const arc = (cx: number, cy: number, rx: number, ry: number, a0: number, a1: num
   Array.from({ length: n + 1 }, (_, i) => { const a = a0 + ((a1 - a0) * i) / n; return [cx + Math.cos(a) * rx, cy + Math.sin(a) * ry]; });
 
 // ── ① 手绘单张：原比例小照片 + 看图配色的手绘细线 ─────────────────
-function drawSolo(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOptions) {
-  const u = W / 1080, img = imgs[0]!;
+/** 手绘单张版式：底色 + 照片位置（保持原比例），AI 底稿和最终画布共用 */
+export function soloLayout(W: number, H: number, img: Img) {
   const base = avgColor(img);
-  const lum = (base[0] * 0.3 + base[1] * 0.59 + base[2] * 0.11) / 255;
-  ctx.fillStyle = hex(mix(base, [250, 247, 236], 0.86));
-  ctx.fillRect(0, 0, W, H);
-  // 照片保持原比例，约占画面 52% 宽（竖图收窄）
   const ar = img.width / img.height;
   let pw = W * (ar >= 1 ? 0.56 : 0.46), ph = pw / ar;
   if (ph > H * 0.5) { ph = H * 0.5; pw = ph * ar; }
-  const px = (W - pw) / 2, py = (H - ph) / 2;
+  return { base, bg: hex(mix(base, [250, 247, 236], 0.86)), px: (W - pw) / 2, py: (H - ph) / 2, pw, ph };
+}
+
+function drawSolo(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOptions) {
+  const u = W / 1080, img = imgs[0]!;
+  const { base, bg, px, py, pw, ph } = soloLayout(W, H, img);
+  const lum = (base[0] * 0.3 + base[1] * 0.59 + base[2] * 0.11) / 255;
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+  // 照片保持原比例，原图像素直接绘制
   ctx.drawImage(img, px, py, pw, ph);
+  if (o.soloDoodle) {
+    ctx.drawImage(o.soloDoodle, 0, 0, W, H);
+    return grain(ctx, W, H, 0.05);
+  }
   if (o.soloLines === "pending") return grain(ctx, W, H, 0.06);
   if (o.soloLines) {
     o.soloLines.forEach((st, i) => {
@@ -481,5 +492,5 @@ export function recommendTemplate(count: number, category: CameraCategory | null
 export function defaultOptions(place: string | null = null): TemplateOptions {
   const d = new Date();
   const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  return { caption: place ?? "", date, frame: 0, format: "mini", crops: [0.5, 0.5], swap: false, sticker: null, stickerColor: null, seed: 1, pcrops: [null, null, null, null], soloLines: null, puzzleAI: null };
+  return { caption: place ?? "", date, frame: 0, format: "mini", crops: [0.5, 0.5], swap: false, sticker: null, stickerColor: null, seed: 1, pcrops: [null, null, null, null], soloLines: null, soloDoodle: null, puzzleAI: null };
 }
