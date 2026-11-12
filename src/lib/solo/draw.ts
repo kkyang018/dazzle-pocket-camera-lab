@@ -4,7 +4,7 @@ import { FRAMES } from "@/lib/render";
 import { grain, noShadow, rng, softShadow, type Ctx, type Img } from "@/lib/templates/draw";
 import { crayon, spline, type LineStyle, type Pt } from "./crayon";
 import { MOTIFS, accentStrokes, type Stroke } from "./motifs";
-import { inkColor, lum, rgbToHsl, standOut, tintedPaper, toHex, toRgb, type Tone } from "./plan";
+import { inkColor, livelyPalette, lum, rgbToHsl, standOut, tintedPaper, toHex, toRgb, type Tone } from "./plan";
 import type { Anchor, MotifSize, Outline, SoloData } from "./types";
 
 export type PhotoRect = { px: number; py: number; pw: number; ph: number };
@@ -61,16 +61,22 @@ export function photoTone(img: Img, skipSkin = false): Tone {
     l += lum(rgb);
   }
   // 相邻色相合并（±20°）再取峰值，峰值处用加权平均得到更准的色相
-  let peak = 0, best = -1;
-  for (let k = 0; k < 36; k++) {
+  const score = Array.from({ length: 36 }, (_, k) => {
     let v = 0;
     for (let j = -2; j <= 2; j++) v += bins[(k + j + 36) % 36]! * (j === 0 ? 1 : Math.abs(j) === 1 ? 0.8 : 0.5);
-    if (v > best) { best = v; peak = k; }
-  }
-  let hs = 0, ws = 0;
-  for (let j = -2; j <= 2; j++) { const w = bins[(peak + j + 36) % 36]!; hs += (peak + j) * 10 * w; ws += w; }
-  const hue = ws ? ((hs / ws + 5) % 360 + 360) % 360 : peak * 10 + 5;
-  return { hue, sat: sat / n, lum: l / n };
+    return v;
+  });
+  const centre = (peak: number) => {
+    let hs = 0, ws = 0;
+    for (let j = -2; j <= 2; j++) { const w = bins[(peak + j + 36) % 36]!; hs += (peak + j) * 10 * w; ws += w; }
+    return ws ? ((hs / ws + 5) % 360 + 360) % 360 : peak * 10 + 5;
+  };
+  const p1 = score.indexOf(Math.max(...score));
+  // 第二种颜色：和主色相差 60° 以上的最高峰
+  let p2 = -1;
+  score.forEach((v, k) => { const d = Math.min(Math.abs(k - p1), 36 - Math.abs(k - p1)); if (d >= 6 && (p2 < 0 || v > score[p2]!)) p2 = k; });
+  const ratio = p2 >= 0 && score[p1]! > 0 ? score[p2]! / score[p1]! : 0;
+  return { hue: centre(p1), sat: sat / n, lum: l / n, alt: ratio >= 0.3 ? { hue: centre(p2), ratio } : null };
 }
 
 /** 照片平均色 → 默认纸色（AI 还没回来时用） */
@@ -245,7 +251,9 @@ export function drawSoloCard(ctx: Ctx, W: number, H: number, img: Img, data: Sol
   const photo = cropInner(img, look.frame);
   const tone = photoTone(photo, !!data?.outline);
   // 纸张颜色跟照片色调走：浅色亮、深色暗；照片越鲜艳纸越素
-  const aiHue = plan?.colors[0] ? rgbToHsl(toRgb(plan.colors[0]) ?? [200, 150, 100])[0] : 40;
+  // AI（或本地规则）选的线条色里，第一种有颜色、又不是暖橙的色相，用来区分暖色照片
+  const aiHue = (plan?.colors ?? []).map((c) => rgbToHsl(toRgb(c) ?? [128, 128, 128]))
+    .find(([h, s]) => s > 0.25 && !(h >= 5 && h < 55))?.[0] ?? null;
   const paper = tintedPaper(tone, look.dark, aiHue);
   ctx.fillStyle = paper;
   ctx.fillRect(0, 0, W, H);
@@ -268,10 +276,11 @@ export function drawSoloCard(ctx: Ctx, W: number, H: number, img: Img, data: Sol
   }
 
   const lw = 6 * u;
-  // 纸上的线条：和纸张拉开明度，保证看得清
-  const colors = (plan.colors.length ? plan.colors : ["#C9824F"]).map((c) => inkColor(c, paper));
+  // 纸上的线条：柔和但有色彩，再和纸张拉开明度，保证看得清
+  const lively = livelyPalette(plan.colors.length ? plan.colors : ["#C9824F"]);
+  const colors = lively.map((c) => inkColor(c, paper));
   // 画在照片上的描边和点缀：挑和照片主色相差最远的颜色（绿照片不用绿线）
-  const inPhoto = standOut(plan.colors.length ? plan.colors : colors, tone);
+  const inPhoto = standOut(lively, tone);
   const rand = rng(seed * 7919 + 17);
   const flip = seed % 2 === 0; // "换一组"时左右镜像，再加上随机抖动
 
@@ -308,17 +317,20 @@ export function drawSoloCard(ctx: Ctx, W: number, H: number, img: Img, data: Sol
   // 长线分散到不同的角：先对角，再补另外两个角
   const startCorner = Math.floor(rand() * 4);
   const corners = [0, 2, 1, 3].map((d) => (startCorner + d) % 4);
-  // 角上环绕放在对角（corners[0] 和 corners[1] 是对角），长线放另外两个角
-  const wrapCorners = [corners[0]!, corners[1]!], lineCorners = [corners[2]!, corners[3]!];
-  for (let k = 0; k < plan.flows; k++) {
+  // 只放一条 L 形环绕（corners[0]），长线放在对角和另外两个角
+  // 至少 3 条：一条 L 形环绕 + 一条虚线 + 一条点线
+  const flows = Math.max(3, plan.flows);
+  for (let k = 0; k < flows; k++) {
     const color = colors[(k + 1) % colors.length]!;
-    if (k % 2 === 0) {
+    if (k === 0) {
       // 角上环绕：L 形线 + 小波浪
-      const { arm, squiggle } = cornerWrap(rect, wrapCorners[(k / 2) % 2]!, rand, band);
-      crayon(ctx, arm, color, lw * 0.95, seed * 211 + k, k === 0 ? "solid" : styles[(k + seed) % 3]!);
+      const { arm, squiggle } = cornerWrap(rect, corners[0]!, rand, band);
+      crayon(ctx, arm, color, lw * 0.95, seed * 211 + k, "solid");
       crayon(ctx, squiggle, colors[(k + 2) % colors.length]!, lw * 0.85, seed * 223 + k, "solid", { wobble: 0.3 });
     } else {
-      crayon(ctx, flowLine(rect, lineCorners[((k - 1) / 2) % 2]!, rand, band), color, lw * 0.85, seed * 211 + k, styles[(k + seed) % 3]!);
+      // 其余长线固定包含一条虚线、一条点线（顺序随"换一组"变），第三条起实线
+      const style: LineStyle = k <= 2 ? (((k + seed) % 2 ? "dash" : "dot") as LineStyle) : styles[(k + seed) % 3]!;
+      crayon(ctx, flowLine(rect, corners[k % 4]!, rand, band), color, lw * 0.85, seed * 211 + k, style);
     }
   }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { maskToOutline } from "@/lib/solo/outline";
-import { inkColor, localPlan, paperColor, rgbToHsl, sanitizePlan, standOut, tintedPaper, toRgb, lum } from "@/lib/solo/plan";
+import { inkColor, localPlan, paperColor, paperHue, rgbToHsl, sanitizePlan, standOut, tintedPaper, toRgb, lum } from "@/lib/solo/plan";
 
 /** 画一个"人"：圆头 + 下半身一直延伸到画面底边（被裁到） */
 function personMask(w: number, h: number) {
@@ -67,6 +67,13 @@ describe("跟着照片走的纸张和描边", () => {
     const dull = hsl(tintedPaper({ hue: 30, sat: 0.08, lum: 0.5 }, false))[1];
     expect(dull).toBeGreaterThan(vivid);
   });
+  it("暖色主调的照片：有第二种明显颜色就用它，没有就参考 AI 线条色", () => {
+    expect(paperHue({ hue: 25, sat: 0.2, lum: 0.4, alt: { hue: 215, ratio: 0.5 } }, null)).toBe(215);
+    expect(paperHue({ hue: 25, sat: 0.2, lum: 0.4, alt: null }, 340)).toBe(340);
+    expect(paperHue({ hue: 25, sat: 0.2, lum: 0.4, alt: null }, null)).toBe(25);
+    expect(paperHue({ hue: 110, sat: 0.2, lum: 0.4, alt: { hue: 25, ratio: 0.8 } }, 340)).toBe(110); // 非暖色照片照旧
+  });
+
   it("绿色照片上的描边不用绿色", () => {
     const c = standOut(["#6f9a4f", "#d2603a", "#e0a93a"], { hue: 110, sat: 0.4, lum: 0.45 });
     expect(c).not.toBe("#6f9a4f");

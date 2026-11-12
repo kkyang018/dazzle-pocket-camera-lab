@@ -65,16 +65,25 @@ export function crayon(ctx: CanvasRenderingContext2D, pts: Pt[], color: string, 
   const step = Math.max(0.6, w * 0.3);
   const samples = resample(pts, step);
   const total = samples.length * step;
-  // 虚线/点线：按弧长决定哪些点要画；虚线每段长短略不同，像手画
-  const dashOn = w * 3.8, dashOff = w * 2.8, dotGap = w * 2.5;
+  // 虚线/点线：每一段/每个点的长度和间距都随机一点，像手画的，不那么规则
   const shake = noise1(r), press = noise1(r), tooth = noise1(r);
   const wl = w * 14; // 手抖的波长
+  const gaps: boolean[] = [];
+  if (style !== "solid") {
+    let s = 0;
+    while (s < samples.length * step) {
+      const on = style === "dash" ? w * (2.4 + r() * 3.6) : step * 1.01;
+      const off = style === "dash" ? w * (1.8 + r() * 2.4) : w * (1.8 + r() * 1.6);
+      for (let x = s; x < s + on; x += step) gaps.push(false);
+      for (let x = s + on; x < s + on + off; x += step) gaps.push(true);
+      s += on + off;
+    }
+  }
   ctx.save();
   ctx.fillStyle = color;
   for (let i = 0; i < samples.length; i++) {
     const s = i * step;
-    if (style === "dash" && (s + shake(s / (w * 30)) * w) % (dashOn + dashOff) > dashOn) continue;
-    if (style === "dot" && s % dotGap > step * 1.01) continue;
+    if (style !== "solid" && gaps[i]) continue;
     // 纸纹：偶尔的小断口
     if (style === "solid" && tooth(s / (w * 2.2)) > 0.8) continue;
     const [x0, y0] = samples[i]!;

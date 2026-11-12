@@ -32,17 +32,51 @@ export function hslToRgb(h: number, s: number, l: number): RGB {
 }
 const hueDist = (a: number, b: number) => { const d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; };
 
-/** 照片的主色调：hue = 饱和度加权的主色相，sat = 平均饱和度，lum = 平均明度 */
-export type Tone = { hue: number; sat: number; lum: number };
+/** 照片的主色调：hue = 面积最大的色相，alt = 第二种明显的颜色，sat = 平均饱和度，lum = 平均明度 */
+export type Tone = { hue: number; sat: number; lum: number; alt?: { hue: number; ratio: number } | null };
+
+const isWarm = (h: number) => h >= 5 && h < 55;
 
 /**
- * 有色彩的纸：色相跟照片走；照片越鲜艳纸越素，照片越灰纸越有颜色。
+ * 纸张色相：
+ * - 照片几乎没颜色 → 用 AI 线条色的色相
+ * - 主色是暖色（暖光、木头、夕阳很常见，都选它会让大家的纸都是杏色）→
+ *   有第二种明显的颜色就用它；没有就参考 AI 线条色
+ * - 其他 → 照片主色
+ */
+export function paperHue(tone: Tone, aiHue: number | null): number {
+  if (tone.sat < 0.06) return aiHue ?? 40;
+  if (isWarm(tone.hue)) {
+    if (tone.alt) return tone.alt.hue;
+    if (aiHue != null && !isWarm(aiHue)) return aiHue;
+  }
+  return tone.hue;
+}
+
+/**
+ * 有色彩的纸：色相见 paperHue；照片越鲜艳纸越素，照片越灰纸越有颜色。
  * 浅色纸亮度高，深色纸压暗。
  */
-export function tintedPaper(tone: Tone, dark: boolean, fallbackHue = 40): string {
-  const hue = tone.sat < 0.06 ? fallbackHue : tone.hue;
+export function tintedPaper(tone: Tone, dark: boolean, aiHue: number | null = null): string {
+  const hue = paperHue(tone, aiHue);
   const s = Math.min(0.5, Math.max(0.12, 0.55 - tone.sat * 0.9));
   return toHex(dark ? hslToRgb(hue, s * 0.8, 0.15) : hslToRgb(hue, s, 0.88));
+}
+
+/**
+ * 柔和但有色彩的线条色：饱和度提到 0.45–0.72，明度收在 0.5–0.68；
+ * 不够三种颜色时补一种和第一种相隔约 130° 的搭配色。
+ */
+export function livelyPalette(colors: string[]): string[] {
+  const out = colors.map((c) => {
+    const [h, s, l] = rgbToHsl(toRgb(c) ?? [200, 130, 90]);
+    return toHex(hslToRgb(h, Math.min(0.72, Math.max(0.45, s * 1.25)), Math.min(0.68, Math.max(0.5, l))));
+  });
+  if (out.length < 3) {
+    const [h] = rgbToHsl(toRgb(out[0] ?? "#D9875E")!);
+    out.push(toHex(hslToRgb((h + 130) % 360, 0.55, 0.6)));
+  }
+  return out.slice(0, 3);
 }
 
 /** 在照片上最显眼的颜色：和照片主色相差得远、明度拉得开 */
