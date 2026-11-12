@@ -15,6 +15,7 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AppProvider, useApp } from "../lib/app-state";
 import { TabBar } from "../components/app/tab-bar";
 import { HintBar } from "../components/app/hint-bar";
+import { SaveSheet } from "../components/app/save-sheet";
 
 function NotFoundComponent() {
   return (
@@ -147,6 +148,7 @@ function AppShell() {
         <Outlet />
       </div>
       <TabBar />
+      <SaveSheet />
     </div>
   );
 }

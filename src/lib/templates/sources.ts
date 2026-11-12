@@ -1,4 +1,5 @@
 import type { AlbumItem } from "@/lib/app-state";
+import { openSaveSheet } from "@/components/app/save-sheet";
 import { EXPORT_EDGE, PREVIEW_EDGE, loadImage, renderWithPreset, scaleToCanvas } from "@/lib/render";
 
 // 相册照片的显影图：预览用长边 1080，导出用原图重新渲染（长边 ≤4000）。
@@ -57,16 +58,21 @@ function download(file: File) {
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
-/** 一次保存多张：逐张直接下载（间隔一点，避免浏览器把连续下载拦掉） */
+/** 手机（触屏）：直接下载会跳到文件预览页，所以改为在当前页弹保存面板 */
+const isTouch = () => typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+
+/** 一次保存多张：手机弹保存面板；电脑逐张直接下载（间隔一点，避免浏览器把连续下载拦掉） */
 export async function saveCanvases(list: { canvas: HTMLCanvasElement; name: string }[]) {
   const files = await Promise.all(list.map(({ canvas, name }) => toFile(canvas, name)));
+  if (isTouch()) {
+    openSaveSheet(files);
+    return "sheet" as const;
+  }
   files.forEach((f, i) => setTimeout(() => download(f), i * 300));
   return "downloaded" as const;
 }
 
-/** 保存一张：一步直接下载。
- * 以前先走系统分享（navigator.share），在 Windows / 安卓上会弹出分享面板、要点好几步，所以改成直接下载。 */
+/** 保存一张：手机弹保存面板（点按钮存进相册 / 长按保存，不跳页）；电脑一步直接下载 */
 export async function saveCanvas(canvas: HTMLCanvasElement, name: string) {
-  download(await toFile(canvas, name));
-  return "downloaded" as const;
+  return saveCanvases([{ canvas, name }]);
 }
