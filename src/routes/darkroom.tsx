@@ -74,13 +74,15 @@ function DarkroomPage() {
   const [zoom, setZoom] = useState<{ src: string; big: boolean } | null>(null);
   const [aiWhy, setAiWhy] = useState<string | null>(null);
   const moved = useRef(false);
+  // 相纸区域尺寸变化时重新适配；只在相纸区域出现（有照片和相机）时绑定一次
+  const ready = !!photo && !!camera;
   useEffect(() => {
     const el = paperRef.current;
     if (!el) return;
     const ro = new ResizeObserver(([e]) => setBox({ w: e!.contentRect.width, h: e!.contentRect.height }));
     ro.observe(el);
     return () => ro.disconnect();
-  });
+  }, [ready]);
   const dragStart = useRef<{ x: number; y: number; cx: number; cy: number; w: number; h: number; mx: number; my: number } | null>(null);
 
   const stats = base?.stats;
@@ -246,7 +248,7 @@ function DarkroomPage() {
   const led = <span className={cn("size-1.5 shrink-0 rounded-full", developing ? "lamp-on bg-destructive" : phase === "done" ? "bg-muted-foreground/40" : "bg-primary shadow-[0_0_6px_1px_var(--primary)]")} />;
   const devButton = (
       <div className="flex-1 rounded-2xl bg-background p-1 shadow-[inset_0_2px_4px_rgb(0_0_0/0.8),0_1px_0_var(--hairline)]">
-        <button type="button" onClick={develop} disabled={developing}
+        <button type="button" onClick={develop} disabled={developing} aria-label={label}
           className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-hairline bg-gradient-to-b from-surface-raised to-surface font-serif text-[15px] tracking-[0.3em] text-primary shadow-[inset_0_1px_0_rgb(255_255_255/0.08),0_2px_3px_rgb(0_0_0/0.6)] transition-transform active:translate-y-[1.5px] active:shadow-[inset_0_2px_4px_rgb(0_0_0/0.6)] disabled:opacity-70">
           {led}<span className="glow-text">{label}</span>
         </button>

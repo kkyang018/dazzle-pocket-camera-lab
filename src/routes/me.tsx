@@ -8,9 +8,9 @@ export const Route = createFileRoute("/me")({
   head: () => ({
     meta: [
       { title: "我的 · Dazz Lab" },
-      { name: "description", content: "Dazz Lab 个人设置：安静模式与标记说明。" },
+      { name: "description", content: "Dazz Lab 个人设置：安静模式、标记说明与隐私说明。" },
       { property: "og:title", content: "我的 · Dazz Lab" },
-      { property: "og:description", content: "安静模式与标记说明。" },
+      { property: "og:description", content: "安静模式、标记说明与隐私说明。" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -50,6 +50,16 @@ function MePage() {
         </ul>
       </section>
 
+      <section className="mt-7">
+        <SectionLabel>隐私</SectionLabel>
+        <ul className="divide-y divide-hairline rounded-2xl border border-hairline bg-surface">
+          <InfoRow title="照片处理" desc="显影、成品模板、人物识别都在这台设备上完成，原图不会上传" />
+          <InfoRow title="AI 看图" desc="手绘单张会把一张长边 512px 的缩略图发给 AI，用来挑图案和配色；AI 只返回文字数据" />
+          <InfoRow title="照片地点" desc="读取照片里的 GPS 坐标，只把坐标发给地名服务换成城市名，用在拍立得的地点章上" />
+          <InfoRow title="保存位置" desc="印样台的照片只存在这台设备的浏览器里，清除浏览器数据后会消失" />
+        </ul>
+      </section>
+
       <LocalProcessingNote className="py-8" />
     </main>
   );
@@ -60,6 +70,15 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
     <h2 className="mb-2.5 px-1 font-mono text-[10px] tracking-[0.18em] text-muted-foreground uppercase">
       {children}
     </h2>
+  );
+}
+
+function InfoRow({ title, desc }: { title: string; desc: string }) {
+  return (
+    <li className="px-4 py-3.5">
+      <span className="block text-sm">{title}</span>
+      <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{desc}</span>
+    </li>
   );
 }
 

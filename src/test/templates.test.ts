@@ -22,8 +22,8 @@ describe("成品模板规则", () => {
   it("拍立得照片：只能做手绘单张和拍立得；半格、拼图都不行", () => {
     expect(usable(getTemplate("solo"), ["instant"])).toBe(true);
     expect(usable(getTemplate("polaroid"), ["instant"])).toBe(true);
-    expect(blockReason(getTemplate("halfframe"), ["instant", "film"])).toBe("不能放拍立得照片");
-    expect(blockReason(getTemplate("collage"), ["ccd", "instant"])).toBe("不能放拍立得照片");
+    expect(blockReason(getTemplate("halfframe"), ["instant", "film"])).toBe("不能放拍立得照片（拍立得只能做手绘单张或拍立得）");
+    expect(blockReason(getTemplate("collage"), ["ccd", "instant"])).toBe("不能放拍立得照片（拍立得只能做手绘单张或拍立得）");
     // 胶片、CCD：除了拍立得模板，其他三个都能用
     expect(usable(getTemplate("solo"), ["ccd"])).toBe(true);
     expect(usable(getTemplate("halfframe"), ["film", "ccd"])).toBe(true);
@@ -35,7 +35,7 @@ describe("成品模板规则", () => {
     const c = getTemplate("collage");
     expect(blockReason(c, ["film"])).toBe("需要选 2–4 张");
     expect(usable(c, ["film", "ccd", null])).toBe(true);
-    expect(blockReason(c, ["film", "instant", "ccd"])).toBe("不能放拍立得照片");
+    expect(blockReason(c, ["film", "instant", "ccd"])).toBe("不能放拍立得照片（拍立得只能做手绘单张或拍立得）");
   });
   it("半格只能正好 2 张：1 张和 3 张都不能用", () => {
     const h = getTemplate("halfframe");

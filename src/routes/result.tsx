@@ -51,8 +51,11 @@ function ResultPage() {
   const items = useMemo(() => selection.map((id) => album.find((a) => a.id === id)).filter((a) => !!a), [album, selection]);
   const cats = useMemo(() => items.map((i) => i.category), [items]);
   const lead = items[0] ?? null;
-  const rec = recommendTemplate(items.length, lead?.category ?? null);
-  const [tid, setTid] = useState<TemplateId>(rec);
+  // 推荐的模板用不了（比如混进了拍立得照片）时不标"AI 推荐"，默认打开第一个能用的
+  const recRaw = recommendTemplate(items.length, lead?.category ?? null);
+  const recOk = usable(getTemplate(recRaw), cats);
+  const rec: TemplateId | null = recOk ? recRaw : null;
+  const [tid, setTid] = useState<TemplateId>(() => rec ?? TEMPLATES.find((x) => usable(x, cats))?.id ?? recRaw);
   const [opts, setOpts] = useState<TemplateOptions>(() => defaultOptions(lead?.place ?? null));
   // 拍立得：相纸尺寸和边框跟随拍摄的相机，成品台只盖日期和地点两个章
   const paper = lead?.look?.frame;
@@ -250,7 +253,9 @@ function ResultPage() {
   async function save() {
     setSaving(true);
     try {
-      const srcs = await Promise.all(items.slice(0, n).map((i) => exportSource(i, bare)));
+      // 拼图每格最大约 1620px 宽，原图用长边 2400 就够清晰，省一半以上内存（手机导出更稳）
+      const edge = t.id === "collage" ? 2400 : undefined;
+      const srcs = await Promise.all(items.slice(0, n).map((i) => exportSource(i, bare, edge)));
       const s = EXPORT_LONG / Math.max(w, h);
       const out = document.createElement("canvas");
       out.width = Math.round(w * s);

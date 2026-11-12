@@ -12,17 +12,8 @@ import {
 import { deleteItem, loadAll, putItem } from "./album-store";
 import { placeName } from "./geo";
 import { photoFromSample, type Photo } from "./photo";
-import sampleStreet from "@/assets/sample-street.jpg";
-import samplePortrait from "@/assets/sample-portrait.jpg";
-import sampleCafe from "@/assets/sample-cafe.jpg";
-import sampleSnow from "@/assets/sample-snow.jpg";
-
-const SAMPLES = [
-  { src: sampleSnow, name: "雪山小镇" },
-  { src: sampleStreet, name: "海边小镇" },
-  { src: samplePortrait, name: "公园" },
-  { src: sampleCafe, name: "窗边咖啡" },
-];
+import { SAMPLES } from "./samples";
+import { forgetDeveloped } from "./templates/sources";
 
 // 全局原型状态：只存在内存里（不使用 localStorage）。
 type AppState = {
@@ -127,7 +118,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const removeFromAlbum = useCallback((ids: number[]) => {
-    setAlbum((a) => a.filter((x) => !ids.includes(x.id)));
+    setAlbum((a) => {
+      // 释放删掉的照片：显影缓存 + 本机图片地址（正在暗房里用的那张除外）
+      a.filter((x) => ids.includes(x.id)).forEach((x) => {
+        forgetDeveloped(x.id);
+        if (x.photo.origin === "album" && photoRef.current?.src !== x.photo.src) {
+          albumSrcs.current.delete(x.photo.src);
+          URL.revokeObjectURL(x.photo.src);
+        }
+      });
+      return a.filter((x) => !ids.includes(x.id));
+    });
     setSelection((s) => s.filter((x) => !ids.includes(x)));
     ids.forEach((id) => void deleteItem(id));
   }, []);

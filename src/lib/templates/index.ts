@@ -145,7 +145,7 @@ export function getTemplate(id: TemplateId) {
 export function blockReason(t: TemplateDef, categories: (CameraCategory | null)[]): string | null {
   if (categories.length < t.min || categories.length > t.max) return `需要选 ${t.min === t.max ? t.min : `${t.min}–${t.max}`} 张`;
   if (t.instantOnly && categories[0] !== "instant") return "只有拍立得相机拍的照片能做";
-  if (t.noInstant && categories.includes("instant")) return "不能放拍立得照片";
+  if (t.noInstant && categories.includes("instant")) return "不能放拍立得照片（拍立得只能做手绘单张或拍立得）";
   return null;
 }
 export function usable(t: TemplateDef, categories: (CameraCategory | null)[]) {

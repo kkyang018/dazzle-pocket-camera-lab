@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Check, ChevronLeft, Download, ImagePlus, Loader2, Trash2 } from "lucide-react";
+import { Aperture, Check, ChevronLeft, Download, ImagePlus, Loader2, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { ApproxTag } from "@/components/app/marks";
 import { useApp, type AlbumItem } from "@/lib/app-state";
@@ -24,7 +24,7 @@ export const Route = createFileRoute("/album")({
 });
 
 function AlbumPage() {
-  const { album, addToAlbum, removeFromAlbum, selection, setSelection, showHint } = useApp();
+  const { album, addToAlbum, removeFromAlbum, selection, setSelection, showHint, setPhoto } = useApp();
   const navigate = useNavigate();
   const input = useRef<HTMLInputElement>(null);
   const [thumbs, setThumbs] = useState<Record<number, string>>({});
@@ -85,7 +85,7 @@ function AlbumPage() {
         </button>
         <input ref={input} type="file" accept="image/*" multiple className="sr-only" tabIndex={-1} aria-hidden onChange={onFile} />
       </header>
-      <p className="mt-2 text-[12px] text-muted-foreground">轻点照片勾选 1–{MAX_SELECT} 张，可以直接保存到手机，也可以做成成品（1 张：手绘/拍立得 · 2 张：半格 · 3–4 张：拼图）。照片保存在这台设备的浏览器里。</p>
+      <p className="mt-2 text-[12px] text-muted-foreground">轻点照片勾选 1–{MAX_SELECT} 张，可以保存到手机、做成成品（1 张：手绘单张 / 拍立得 · 2 张：半格 / 拼图 · 3–4 张：拼图），选 1 张时还能再送进暗房冲洗。照片只存在这台设备的浏览器里。</p>
 
       <ul className="mt-4 grid grid-cols-3 gap-1.5">
         {album.map((a) => {
@@ -119,10 +119,17 @@ function AlbumPage() {
                 <Trash2 className="size-4" />
               </button>
             )}
-            <button type="button" onClick={saveSelected} disabled={saving}
+            <button type="button" onClick={saveSelected} disabled={saving} aria-label="保存到手机相册"
               className="flex shrink-0 items-center justify-center gap-1.5 rounded-full bg-card px-4 text-[13px] font-medium text-foreground shadow-lg disabled:opacity-60">
-              {saving ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />} 保存到相册
+              {saving ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />} {live.length === 1 ? "保存" : "保存到相册"}
             </button>
+            {/* 选 1 张：用这张的原图回暗房重新冲洗（导入的原片、显影过的都可以） */}
+            {live.length === 1 && (
+              <button type="button" onClick={() => { setPhoto(picked[0]!.photo); navigate({ to: "/cameras" }); }}
+                className="flex shrink-0 items-center justify-center gap-1.5 rounded-full bg-card px-4 text-[13px] font-medium text-foreground shadow-lg">
+                <Aperture className="size-4" /> 冲洗
+              </button>
+            )}
             <button type="button" onClick={() => navigate({ to: "/result" })}
               className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-primary py-3 text-[13px] font-medium text-primary-foreground shadow-lg">
               <Check className="size-4" /> 做成品 · {live.length}

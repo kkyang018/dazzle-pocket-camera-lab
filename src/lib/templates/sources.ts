@@ -19,8 +19,14 @@ export function developed(item: AlbumItem, edge: number = PREVIEW_EDGE, bare = f
   return p;
 }
 
-export function exportSource(item: AlbumItem, bare = false) {
-  return developed(item, EXPORT_EDGE, bare);
+/** 导出用原图重新渲染；edge 可以按模板实际需要的尺寸给小一点，省内存（手机上更稳） */
+export function exportSource(item: AlbumItem, bare = false, edge = EXPORT_EDGE) {
+  return developed(item, edge, bare);
+}
+
+/** 照片从印样台删掉后，释放它的显影缓存 */
+export function forgetDeveloped(id: number) {
+  for (const key of [...cache.keys()]) if (key.startsWith(`${id}:`)) cache.delete(key);
 }
 
 export async function thumbnail(item: AlbumItem) {

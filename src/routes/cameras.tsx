@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { CameraCard } from "@/components/app/camera-card";
@@ -62,6 +62,11 @@ function CamerasPage() {
   useLayoutEffect(() => {
     if (rowRef.current) rowRef.current.scrollLeft = 0;
   }, [rowKey]);
+
+  // 还没选相机时，自动选上当前分类里排第一的 AI 推荐，预览马上就有效果，也能直接进暗房
+  useEffect(() => {
+    if (!cameraId && stats && row[0]) setCameraId(row[0].id);
+  }, [cameraId, stats, row, setCameraId]);
 
   if (!photo) {
     return (

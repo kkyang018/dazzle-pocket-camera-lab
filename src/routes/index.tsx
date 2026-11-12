@@ -5,15 +5,7 @@ import { LocalProcessingNote } from "@/components/app/local-note";
 import { useApp } from "@/lib/app-state";
 import { photoFromFile, photoFromSample } from "@/lib/photo";
 import { cn } from "@/lib/utils";
-import sampleStreet from "@/assets/sample-street.jpg";
-import samplePortrait from "@/assets/sample-portrait.jpg";
-import sampleCafe from "@/assets/sample-cafe.jpg";
-
-const samples = [
-  { key: "street", src: sampleStreet, name: "海边小镇", tag: "01" },
-  { key: "portrait", src: samplePortrait, name: "公园笑脸", tag: "02" },
-  { key: "cafe", src: sampleCafe, name: "窗边咖啡", tag: "03" },
-];
+import { SAMPLES as samples } from "@/lib/samples";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -63,7 +55,7 @@ function LabPage() {
             <span className="animate-blink size-1.5 rounded-full bg-primary" aria-hidden />
             Darkroom
           </span>
-          <Link to="/album" className="rounded-full border border-hairline px-2.5 py-1 text-foreground">相册 ›</Link>
+          <Link to="/album" className="rounded-full border border-hairline px-2.5 py-1 text-foreground">印样台 ›</Link>
         </div>
         <h1 className="mt-6 font-serif text-[40px] leading-none font-black tracking-tight">Dazz Lab</h1>
         <p className="mt-3 text-sm text-muted-foreground">选一张照片，再挑一台相机冲洗它。</p>
@@ -109,9 +101,9 @@ function LabPage() {
             <h2 id="samples-label" className="font-mono text-[10px] tracking-[0.18em] text-muted-foreground uppercase">
               没有照片？用示例试试
             </h2>
-            <span className="font-mono text-[10px] text-muted-foreground">03</span>
+            <span className="font-mono text-[10px] text-muted-foreground">{String(samples.length).padStart(2, "0")}</span>
           </div>
-          <ul className="grid grid-cols-3 gap-2.5">
+          <ul className="grid grid-cols-4 gap-2">
             {samples.map((s) => (
               <li key={s.key}>
                 <button
@@ -132,9 +124,9 @@ function LabPage() {
                     loading="lazy"
                     className="size-full object-cover"
                   />
-                  <span className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-background/80 to-transparent px-2 pt-6 pb-1.5 text-left">
-                    <span className="text-[11px] text-foreground">{s.name}</span>
-                    <span className="font-mono text-[9px] text-muted-foreground">{s.tag}</span>
+                  <span className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-background/80 to-transparent px-1.5 pt-6 pb-1.5 text-left">
+                    <span className="truncate text-[10px] text-foreground">{s.name}</span>
+                    <span className="font-mono text-[8px] text-muted-foreground">{s.tag}</span>
                   </span>
                   {busy === s.key && (
                     <span className="absolute inset-0 flex items-center justify-center bg-background/40">
