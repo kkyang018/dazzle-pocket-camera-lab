@@ -21,7 +21,10 @@ export const Route = createFileRoute("/")({
 });
 
 function LabPage() {
-  const { setPhoto } = useApp();
+  const { setPhoto, setRewashId, album } = useApp();
+  // 新手引导：印样台里还没有自己的照片时显示，也可以手动关掉（只在本次打开有效）
+  const [guideClosed, setGuideClosed] = useState(false);
+  const showGuide = !guideClosed && !album.some((a) => a.id > 0);
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -32,6 +35,7 @@ function LabPage() {
     setError(null);
     try {
       setPhoto(await load());
+      setRewashId(null); // 新照片：显影后新加一张，不覆盖印样台里的旧照片
       navigate({ to: "/cameras" });
     } catch {
       setError("这张照片读不出来，换一张试试");
@@ -58,6 +62,18 @@ function LabPage() {
         </div>
         <h1 className="mt-6 font-serif text-[40px] leading-none font-black tracking-tight">Dazz Lab</h1>
         <p className="mt-3 text-sm text-muted-foreground">选一张照片，再挑一台相机冲洗它。</p>
+        {showGuide && (
+          <ol aria-label="怎么用" className="relative mt-4 grid grid-cols-3 gap-1.5 rounded-2xl border border-hairline bg-surface/60 p-2.5 pr-7">
+            {[["01", "选照片"], ["02", "挑相机 · 进暗房显影"], ["03", "收进印样台 · 做成品"]].map(([n, t]) => (
+              <li key={n} className="flex flex-col gap-0.5">
+                <span className="font-mono text-[9px] text-primary">{n}</span>
+                <span className="text-[11px] leading-snug text-foreground/85">{t}</span>
+              </li>
+            ))}
+            <button type="button" onClick={() => setGuideClosed(true)} aria-label="关闭引导"
+              className="absolute top-1.5 right-2 text-[13px] leading-none text-muted-foreground">×</button>
+          </ol>
+        )}
       </header>
 
       <div className="flex flex-1 flex-col justify-center py-8">

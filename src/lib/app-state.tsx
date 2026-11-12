@@ -34,7 +34,17 @@ type AppState = {
   /** 相册：暗房显影后的照片 + 样片，只在内存里 */
   album: AlbumItem[];
   addToAlbum: (item: Omit<AlbumItem, "id" | "place">) => number;
-  removeFromAlbum: (ids: number[]) => void;
+  /** 重新冲洗后更新原来那张，而不是再加一张 */
+  updateAlbumItem: (id: number, patch: Partial<Pick<AlbumItem, "look" | "cameraName" | "category" | "cameraId" | "edit">>) => void;
+  /** 删除：先从印样台拿掉，几秒内可以撤销，之后才真正删掉 */
+  removeFromAlbum: (ids: number[]) => AlbumItem[];
+  undoRemove: (items: AlbumItem[]) => void;
+  /** 暗房里每张照片 × 每台相机的调整，离开暗房再回来时恢复（只在内存里） */
+  edits: Record<string, DarkroomEdit>;
+  saveEdit: (key: string, edit: DarkroomEdit) => void;
+  /** 正在从印样台回暗房重新冲洗的那张（显影后更新它） */
+  rewashId: number | null;
+  setRewashId: (id: number | null) => void;
   /** 相册里选中、要做成成品的照片 id（按选择顺序） */
   selection: number[];
   setSelection: (ids: number[]) => void;
@@ -49,7 +59,21 @@ export type AlbumItem = {
   category: CameraCategory | null;
   /** 照片拍摄地（EXIF GPS 识别），样片用样片名 */
   place: string | null;
+  /** 显影用的相机和暗房调整（回暗房时恢复） */
+  cameraId?: string | null;
+  edit?: DarkroomEdit | null;
 };
+
+/** 暗房里的调整 */
+export type DarkroomEdit = {
+  adj: { ev: number; temp: number; tint: number };
+  lookId: string | null;
+  pro: { grain: number; fade: number; sharpen: number };
+  crop: { x: number; y: number; z: number };
+};
+export const editKey = (photoSrc: string, cameraId: string) => `${photoSrc}|${cameraId}`;
+
+const UNDO_MS = 6000;
 
 export type HintKind = "pro" | "info";
 
@@ -72,6 +96,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [look, setLook] = useState<Preset | null>(null);
   const [album, setAlbum] = useState<AlbumItem[]>([]);
   const [selection, setSelection] = useState<number[]>([]);
+  const [edits, setEdits] = useState<Record<string, DarkroomEdit>>({});
+  const [rewashId, setRewashId] = useState<number | null>(null);
+  const albumRef = useRef<AlbumItem[]>([]);
+  albumRef.current = album;
+  const pendingDelete = useRef(new Map<number, { item: AlbumItem; timer: ReturnType<typeof setTimeout> }>());
   const albumSrcs = useRef(new Set<string>());
   const nextId = useRef(1);
   const pinnedRef = useRef<string[]>([]);
@@ -91,47 +120,75 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPhotoState(p);
   }, []);
 
+  /** 存进本机：原图 blob + 显影参数（样片取回打包的图存成 blob） */
+  const persist = useCallback(async (item: AlbumItem) => {
+    const blob = item.photo.file ?? (await fetch(item.photo.src).then((r) => r.blob()).catch(() => null));
+    if (!blob) return;
+    await putItem({ id: item.id, blob, name: item.photo.name, width: item.photo.width, height: item.photo.height,
+      look: item.look, cameraName: item.cameraName, category: item.category, place: item.place,
+      cameraId: item.cameraId ?? null, edit: item.edit ?? null });
+  }, []);
+
   const addToAlbum = useCallback((item: Omit<AlbumItem, "id" | "place">) => {
     const id = nextId.current++;
     albumSrcs.current.add(item.photo.src);
     const sample = item.photo.origin === "sample";
-    setAlbum((a) => [{ ...item, id, place: sample ? item.photo.name : null }, ...a]);
+    const full: AlbumItem = { ...item, id, place: sample ? item.photo.name : null };
+    setAlbum((a) => [full, ...a]);
+    void persist(full);
     const file = item.photo.file;
     if (!sample && file) {
-      const rec = { id, blob: file, name: item.photo.name, width: item.photo.width, height: item.photo.height,
-        look: item.look, cameraName: item.cameraName, category: item.category, place: null as string | null };
-      void putItem(rec);
       void placeName(file).then((place) => {
         if (!place) return;
         setAlbum((a) => a.map((x) => (x.id === id ? { ...x, place } : x)));
-        void putItem({ ...rec, place });
+        void persist({ ...full, place });
       });
-    } else if (sample) {
-      // 样片显影后也要存下来，否则刷新就丢了：取回打包的样片图存成 blob
-      void fetch(item.photo.src)
-        .then((r) => r.blob())
-        .then((blob) => putItem({ id, blob, name: item.photo.name, width: item.photo.width, height: item.photo.height,
-          look: item.look, cameraName: item.cameraName, category: item.category, place: item.photo.name }))
-        .catch(() => undefined);
     }
     return id;
+  }, [persist]);
+
+  const updateAlbumItem = useCallback((id: number, patch: Partial<Pick<AlbumItem, "look" | "cameraName" | "category" | "cameraId" | "edit">>) => {
+    const cur = albumRef.current.find((x) => x.id === id);
+    if (!cur) return;
+    const next = { ...cur, ...patch };
+    forgetDeveloped(id); // 显影效果变了，缩略图和成品要重新渲染
+    setAlbum((a) => a.map((x) => (x.id === id ? next : x)));
+    void persist(next);
+  }, [persist]);
+
+  /** 真正删除：本机记录、显影缓存、图片地址（正在暗房里用的那张除外） */
+  const finalizeDelete = useCallback((x: AlbumItem) => {
+    pendingDelete.current.delete(x.id);
+    forgetDeveloped(x.id);
+    void deleteItem(x.id);
+    if (x.photo.origin === "album" && photoRef.current?.src !== x.photo.src && !albumRef.current.some((y) => y.photo.src === x.photo.src)) {
+      albumSrcs.current.delete(x.photo.src);
+      URL.revokeObjectURL(x.photo.src);
+    }
   }, []);
 
   const removeFromAlbum = useCallback((ids: number[]) => {
-    setAlbum((a) => {
-      // 释放删掉的照片：显影缓存 + 本机图片地址（正在暗房里用的那张除外）
-      a.filter((x) => ids.includes(x.id)).forEach((x) => {
-        forgetDeveloped(x.id);
-        if (x.photo.origin === "album" && photoRef.current?.src !== x.photo.src) {
-          albumSrcs.current.delete(x.photo.src);
-          URL.revokeObjectURL(x.photo.src);
-        }
-      });
-      return a.filter((x) => !ids.includes(x.id));
-    });
+    const removed = albumRef.current.filter((x) => ids.includes(x.id));
+    setAlbum((a) => a.filter((x) => !ids.includes(x.id)));
     setSelection((s) => s.filter((x) => !ids.includes(x)));
-    ids.forEach((id) => void deleteItem(id));
+    removed.forEach((x) => pendingDelete.current.set(x.id, { item: x, timer: setTimeout(() => finalizeDelete(x), UNDO_MS) }));
+    return removed;
+  }, [finalizeDelete]);
+
+  const undoRemove = useCallback((items: AlbumItem[]) => {
+    items.forEach((x) => { const p = pendingDelete.current.get(x.id); if (p) clearTimeout(p.timer); pendingDelete.current.delete(x.id); });
+    // 放回原来的位置：用户照片按 id 从新到旧，样片在最后
+    setAlbum((a) => [...a, ...items].sort((p, q) => q.id - p.id));
   }, []);
+
+  // 页面关掉前把还在"可撤销"的删除做完，免得刷新后照片又回来
+  useEffect(() => {
+    const flush = () => pendingDelete.current.forEach(({ item, timer: t }) => { clearTimeout(t); finalizeDelete(item); });
+    window.addEventListener("pagehide", flush);
+    return () => window.removeEventListener("pagehide", flush);
+  }, [finalizeDelete]);
+
+  const saveEdit = useCallback((key: string, edit: DarkroomEdit) => setEdits((m) => ({ ...m, [key]: edit })), []);
 
   // 打开时读回本地保存的相册，再放样片（样片不保存）
   useEffect(() => {
@@ -149,7 +206,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const src = URL.createObjectURL(file);
         albumSrcs.current.add(src);
         return { id: r.id, photo: { id: r.id, src, name: r.name, origin: "album", width: r.width, height: r.height, file },
-          look: r.look, cameraName: r.cameraName, category: r.category, place: r.place };
+          look: r.look, cameraName: r.cameraName, category: r.category, place: r.place,
+          cameraId: r.cameraId ?? null, edit: (r.edit as DarkroomEdit | null | undefined) ?? null };
       });
       nextId.current = Math.max(nextId.current, ...stored.map((r) => r.id + 1));
       setAlbum((a) => [...a, ...restored, ...samples]);
@@ -189,7 +247,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setLook,
         album,
         addToAlbum,
+        updateAlbumItem,
         removeFromAlbum,
+        undoRemove,
+        edits,
+        saveEdit,
+        rewashId,
+        setRewashId,
         selection,
         setSelection,
       }}>

@@ -2,7 +2,8 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Aperture, Check, ChevronLeft, Download, ImagePlus, Loader2, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { ApproxTag } from "@/components/app/marks";
-import { useApp, type AlbumItem } from "@/lib/app-state";
+import { editKey, useApp, type AlbumItem } from "@/lib/app-state";
+import { CAMERAS, getCamera } from "@/lib/cameras";
 import { photoFromFile } from "@/lib/photo";
 import { exportSource, saveCanvases, thumbnail } from "@/lib/templates/sources";
 import { cn } from "@/lib/utils";
@@ -24,16 +25,43 @@ export const Route = createFileRoute("/album")({
 });
 
 function AlbumPage() {
-  const { album, addToAlbum, removeFromAlbum, selection, setSelection, showHint, setPhoto } = useApp();
+  const { album, addToAlbum, removeFromAlbum, undoRemove, selection, setSelection, showHint, setPhoto, setCameraId, saveEdit, setRewashId } = useApp();
   const navigate = useNavigate();
   const input = useRef<HTMLInputElement>(null);
-  const [thumbs, setThumbs] = useState<Record<number, string>>({});
+  // 缩略图按"这张照片 + 它当前的显影效果"缓存：重新冲洗后会自动换新
+  const [thumbs, setThumbs] = useState<Record<number, { look: AlbumItem["look"]; url: string }>>({});
   const [saving, setSaving] = useState(false);
+  // 刚删掉的照片：几秒内可以撤销
+  const [undo, setUndo] = useState<{ items: AlbumItem[]; key: number } | null>(null);
 
   useEffect(() => {
-    album.filter((a) => !thumbs[a.id]).forEach((a) =>
-      thumbnail(a).then((url) => setThumbs((t) => ({ ...t, [a.id]: url })), () => undefined));
+    album.filter((a) => thumbs[a.id]?.look !== a.look).forEach((a) =>
+      thumbnail(a).then((url) => setThumbs((t) => ({ ...t, [a.id]: { look: a.look, url } })), () => undefined));
   }, [album, thumbs]);
+  useEffect(() => {
+    if (!undo) return;
+    const t = setTimeout(() => setUndo(null), 6000);
+    return () => clearTimeout(t);
+  }, [undo]);
+
+  const remove = (ids: number[]) => {
+    const items = removeFromAlbum(ids);
+    if (items.length) setUndo({ items, key: Date.now() });
+  };
+
+  /** 回暗房重新冲洗：显影过的直接回到原来的相机和调整，原片先去选相机 */
+  const rewash = (item: AlbumItem) => {
+    setPhoto(item.photo);
+    setRewashId(item.id > 0 ? item.id : null);
+    const cam = getCamera(item.cameraId) ?? CAMERAS.find((c) => c.name === item.cameraName) ?? null;
+    if (cam) {
+      setCameraId(cam.id);
+      if (item.edit) saveEdit(editKey(item.photo.src, cam.id), item.edit);
+      navigate({ to: "/darkroom" });
+    } else {
+      navigate({ to: "/cameras" });
+    }
+  };
 
   const toggle = (item: AlbumItem) => {
     if (selection.includes(item.id)) setSelection(selection.filter((x) => x !== item.id));
@@ -93,7 +121,7 @@ function AlbumPage() {
             <li key={a.id}>
               <button type="button" onClick={() => toggle(a)} aria-pressed={idx >= 0} aria-label={`${a.cameraName ?? a.photo.name}${idx >= 0 ? " 已选" : ""}`}
                 className={cn("relative block aspect-[3/4] w-full overflow-hidden bg-muted transition-transform active:scale-[0.97]", idx >= 0 && "ring-2 ring-primary ring-offset-2 ring-offset-background")}>
-                {thumbs[a.id] && <img src={thumbs[a.id]} alt="" className="size-full object-cover" />}
+                {thumbs[a.id] && <img src={thumbs[a.id]!.url} alt="" className="size-full object-cover" />}
                 <span className={cn("absolute top-1.5 right-1.5 grid size-5 place-items-center rounded-full border font-mono text-[10px]",
                   idx >= 0 ? "border-primary bg-primary text-primary-foreground" : "border-background/80 bg-foreground/20")}>
                   {idx >= 0 ? idx + 1 : ""}
@@ -108,23 +136,30 @@ function AlbumPage() {
       </ul>
       {album.some((a) => a.look && a.photo.origin === "album") && <ApproxTag className="mt-3" />}
 
-      <div className="fixed inset-x-0 bottom-20 z-30 mx-auto flex w-full max-w-[390px] justify-center px-4">
+      <div className="fixed inset-x-0 bottom-20 z-30 mx-auto flex w-full max-w-[390px] flex-col items-center gap-2 px-4">
+        {undo && (
+          <div role="status" className="flex w-full items-center justify-between rounded-full bg-foreground px-4 py-2 text-[13px] text-background shadow-lg">
+            <span>已删除 {undo.items.length} 张</span>
+            <button type="button" onClick={() => { undoRemove(undo.items); setSelection(undo.items.map((x) => x.id)); setUndo(null); }}
+              className="font-medium text-primary">撤销</button>
+          </div>
+        )}
         {live.length > 0 ? (
           <div className="flex w-full gap-2">
             {/* id > 0 是显影/导入的照片（可删）；内置样片 id < 0，不可删 */}
             {picked.some((a) => a.id > 0) && (
-              <button type="button" aria-label="从印样台删除" onClick={() => removeFromAlbum(picked.filter((a) => a.id > 0).map((a) => a.id))}
+              <button type="button" aria-label="从印样台删除" onClick={() => remove(picked.filter((a) => a.id > 0).map((a) => a.id))}
                 className="grid size-12 shrink-0 place-items-center rounded-full bg-card text-foreground shadow-lg">
                 <Trash2 className="size-4" />
               </button>
             )}
             <button type="button" onClick={saveSelected} disabled={saving} aria-label="保存到手机相册"
               className="flex shrink-0 items-center justify-center gap-1.5 rounded-full bg-card px-4 text-[13px] font-medium text-foreground shadow-lg disabled:opacity-60">
-              {saving ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />} {live.length === 1 ? "保存" : "保存到相册"}
+              {saving ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />} 保存
             </button>
-            {/* 选 1 张：用这张的原图回暗房重新冲洗（导入的原片、显影过的都可以） */}
+            {/* 选 1 张：回暗房重新冲洗（显影过的回到原来的相机和调整） */}
             {live.length === 1 && (
-              <button type="button" onClick={() => { setPhoto(picked[0]!.photo); navigate({ to: "/cameras" }); }}
+              <button type="button" onClick={() => rewash(picked[0]!)}
                 className="flex shrink-0 items-center justify-center gap-1.5 rounded-full bg-card px-4 text-[13px] font-medium text-foreground shadow-lg">
                 <Aperture className="size-4" /> 冲洗
               </button>

@@ -11,6 +11,9 @@ export type StoredItem = {
   cameraName: string | null;
   category: CameraCategory | null;
   place: string | null;
+  /** 用的哪台相机、暗房里的调整（回暗房重新冲洗时恢复）；旧记录没有 */
+  cameraId?: string | null;
+  edit?: unknown;
 };
 
 const DB = "dazz-lab";

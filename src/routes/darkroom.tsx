@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AiMark, ApproxTag, PRO_HINT, ProMark } from "@/components/app/marks";
 import { ExposureDial, Ruler } from "@/components/darkroom/controls";
 import { usePhotoBase } from "@/hooks/use-photo-base";
-import { useApp } from "@/lib/app-state";
+import { editKey, useApp } from "@/lib/app-state";
 import { getCamera, type PhotoStats, type Preset } from "@/lib/cameras";
 import { EXPORT_EDGE, loadImage, renderWithPreset, scaleToCanvas } from "@/lib/render";
 import { saveCanvas } from "@/lib/templates/sources";
@@ -50,15 +50,21 @@ export const Route = createFileRoute("/darkroom")({
 });
 
 function DarkroomPage() {
-  const { photo, cameraId, quietMode, setLook, showHint, addToAlbum, setSelection } = useApp();
+  const { photo, cameraId, quietMode, setLook, showHint, addToAlbum, updateAlbumItem, setSelection, edits, saveEdit, rewashId, setRewashId } = useApp();
   const navigate = useNavigate();
   const camera = getCamera(cameraId);
   const base = usePhotoBase(photo);
-  const [adj, setAdj] = useState<Adjust>({ ev: 0, temp: 0, tint: 0 });
-  const [look, setLookId] = useState<string | null>(null);
-  const [pro, setPro] = useState({ grain: 0, fade: 0, sharpen: 0 });
+  // 这张照片 × 这台相机上次在暗房里的调整：离开再回来时恢复
+  const key = photo && cameraId ? editKey(photo.src, cameraId) : null;
+  const saved = key ? edits[key] : undefined;
+  const [adj, setAdj] = useState<Adjust>(() => saved?.adj ?? { ev: 0, temp: 0, tint: 0 });
+  const [look, setLookId] = useState<string | null>(() => saved?.lookId ?? null);
+  const [pro, setPro] = useState(() => saved?.pro ?? { grain: 0, fade: 0, sharpen: 0 });
   // 拍立得取景：x/y 位置 + z 放大倍数（双指 / 滚轮）
-  const [crop, setCrop] = useState({ x: 0.5, y: 0.5, z: 1 });
+  const [crop, setCrop] = useState(() => saved?.crop ?? { x: 0.5, y: 0.5, z: 1 });
+  useEffect(() => {
+    if (key) saveEdit(key, { adj, lookId: look, pro, crop });
+  }, [key, adj, look, pro, crop, saveEdit]);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinch = useRef<{ dist: number; z: number } | null>(null);
   const MAX_CROP_ZOOM = 3;
@@ -161,8 +167,18 @@ function DarkroomPage() {
   const goResult = () => {
     setLook(preset);
     if (photo && camera) {
-      const id = addToAlbum({ photo, look: preset, cameraName: camera.name, category: camera.category });
-      setSelection([id]);
+      const edit = { adj, lookId: look, pro, crop };
+      const info = { look: preset, cameraName: camera.name, category: camera.category, cameraId: camera.id, edit };
+      // 从印样台回来重新冲洗的：更新原来那张；否则新加一张
+      if (rewashId != null) {
+        updateAlbumItem(rewashId, info);
+        setSelection([rewashId]);
+        setRewashId(null);
+        showHint("已更新印样台里的这张");
+      } else {
+        setSelection([addToAlbum({ photo, ...info })]);
+        showHint("已收进印样台");
+      }
     }
     navigate({ to: "/album" });
   };
