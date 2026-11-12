@@ -81,10 +81,11 @@ function drawHalf(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOption
   ctx.restore();
   // 分隔条：两条边沿高度方向轻微起伏（像真实片基的曝光边缘），边缘一点点渗光
   const r = rng(17);
-  const steps = 90, amp = gap * 0.09;
+  // 边缘只留很轻的起伏：远看是直的，近看不是机器切出来的
+  const steps = 90, amp = gap * 0.035;
   const edge = (side: number) => Array.from({ length: steps + 1 }, (_, k) => {
     const y = (k / steps) * H;
-    const wob = Math.sin(k * 0.18 + side * 2) * amp * 0.6 + (r() - 0.5) * amp;
+    const wob = Math.sin(k * 0.12 + side * 2) * amp * 0.6 + (r() - 0.5) * amp * 0.6;
     return [fw + side * gap + wob, y] as [number, number];
   });
   const left = edge(0), right = edge(1);
