@@ -39,46 +39,34 @@ export async function thumbnail(item: AlbumItem) {
   return t.toDataURL("image/jpeg", 0.85);
 }
 
-/** 一次保存多张：能分享就一起分享，否则逐张下载 */
-export async function saveCanvases(list: { canvas: HTMLCanvasElement; name: string }[]) {
-  const files = await Promise.all(list.map(({ canvas, name }) => new Promise<File>((res, rej) =>
-    canvas.toBlob((b) => (b ? res(new File([b], name, { type: "image/jpeg" })) : rej(new Error("encode"))), "image/jpeg", 0.92))));
-  if (navigator.canShare?.({ files })) {
-    try {
-      await navigator.share({ files, title: "Dazz Lab" });
-      return "shared";
-    } catch (e) {
-      if ((e as Error).name === "AbortError") return "cancelled";
-    }
-  }
-  files.forEach((f, i) => setTimeout(() => {
-    const url = URL.createObjectURL(f);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = f.name;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
-  }, i * 300));
-  return "downloaded";
-}
+const toFile = (canvas: HTMLCanvasElement, name: string) =>
+  new Promise<File>((res, rej) =>
+    canvas.toBlob((b) => (b ? res(new File([b], name, { type: "image/jpeg" })) : rej(new Error("encode"))), "image/jpeg", 0.92));
 
-/** 保存到相册：优先系统分享（带文件），不支持时普通下载 */
-export async function saveCanvas(canvas: HTMLCanvasElement, name: string) {
-  const blob = await new Promise<Blob>((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error("encode"))), "image/jpeg", 0.92));
-  const file = new File([blob], name, { type: "image/jpeg" });
-  if (navigator.canShare?.({ files: [file] })) {
-    try {
-      await navigator.share({ files: [file], title: "Dazz Lab" });
-      return "shared";
-    } catch (e) {
-      if ((e as Error).name === "AbortError") return "cancelled";
-    }
-  }
-  const url = URL.createObjectURL(blob);
+/** 直接下载一个文件：隐藏的 <a download>，留在当前页面，不弹系统分享面板、不跳页 */
+function download(file: File) {
+  const url = URL.createObjectURL(file);
   const a = document.createElement("a");
   a.href = url;
-  a.download = name;
+  a.download = file.name;
+  a.rel = "noopener";
+  a.style.display = "none";
+  document.body.appendChild(a);
   a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 4000);
-  return "downloaded";
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+/** 一次保存多张：逐张直接下载（间隔一点，避免浏览器把连续下载拦掉） */
+export async function saveCanvases(list: { canvas: HTMLCanvasElement; name: string }[]) {
+  const files = await Promise.all(list.map(({ canvas, name }) => toFile(canvas, name)));
+  files.forEach((f, i) => setTimeout(() => download(f), i * 300));
+  return "downloaded" as const;
+}
+
+/** 保存一张：一步直接下载。
+ * 以前先走系统分享（navigator.share），在 Windows / 安卓上会弹出分享面板、要点好几步，所以改成直接下载。 */
+export async function saveCanvas(canvas: HTMLCanvasElement, name: string) {
+  download(await toFile(canvas, name));
+  return "downloaded" as const;
 }

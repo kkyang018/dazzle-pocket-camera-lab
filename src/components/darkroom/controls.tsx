@@ -1,18 +1,20 @@
 import { useRef } from "react";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 
 /** 曝光拨盘：上下/左右拖动的距离换算成旋转角度 */
 export function ExposureDial({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   const start = useRef<{ x: number; y: number; v: number } | null>(null);
+  const t = useT();
   const angle = value * 60;
   const ticks = Array.from({ length: 41 }, (_, i) => i);
   return (
     <div className="flex flex-col items-center">
       <div
         role="slider"
-        aria-label="曝光"
+        aria-label={t("曝光", "Exposure")}
         aria-valuemin={-2}
         aria-valuemax={2}
         aria-valuenow={value}

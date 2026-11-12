@@ -9,7 +9,8 @@ import type { SoloData } from "@/lib/solo/types";
 import { MAX_ZOOM, clampCrop, collageRects, coverGeometry, slotCrop, type Crop } from "@/lib/collage";
 import { ChevronLeft, Loader2, Shuffle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AiMark, ApproxTag, ProMark } from "@/components/app/marks";
+import { AiMark, ApproxTag, ProMark, proHint } from "@/components/app/marks";
+import { useT } from "@/lib/i18n";
 import { useApp } from "@/lib/app-state";
 import { loadFonts } from "@/lib/templates/draw";
 import {
@@ -47,7 +48,9 @@ function thumb(c: HTMLCanvasElement) {
 }
 
 function ResultPage() {
-  const { album, selection, showHint } = useApp();
+  const { album, selection, showHint, lang } = useApp();
+  const tr = useT();
+  const tname = (x: { name: string; en: string }) => tr(x.name, x.en);
   const items = useMemo(() => selection.map((id) => album.find((a) => a.id === id)).filter((a) => !!a), [album, selection]);
   const cats = useMemo(() => items.map((i) => i.category), [items]);
   const lead = items[0] ?? null;
@@ -113,9 +116,9 @@ function ResultPage() {
         const r = await callSolo({ data: { image: thumb(img), person: outline?.box ?? null } });
         if (!alive) return;
         if (r.ok) setSolo((m) => ({ ...m, [ids]: { plan: r.data, outline } }));
-        else showHint(r.error);
+        else showHint(tr(r.error, "AI unavailable — using local style"));
       } catch {
-        if (alive) showHint("AI 看图失败，先用本地效果");
+        if (alive) showHint(tr("AI 看图失败，先用本地效果", "AI unavailable — using local style"));
       } finally {
         if (alive) setSoloBusy((m) => ({ ...m, [ids]: false }));
       }
@@ -160,9 +163,9 @@ function ResultPage() {
   const set = <K extends keyof TemplateOptions>(k: K, v: TemplateOptions[K]) => setOpts((o) => ({ ...o, [k]: v }));
   const pick = (id: TemplateId) => {
     const next = getTemplate(id);
-    const why = blockReason(next, cats);
-    if (why) return showHint(`${next.name}：${why}`);
-    if (next.pro) showHint("Pro 功能 · 试用中", "pro");
+    const why = blockReason(next, cats, lang);
+    if (why) return showHint(tr(`${next.name}：${why}`, `${next.en}: ${why}`));
+    if (next.pro) showHint(proHint(lang), "pro");
     setTid(id);
   };
 
@@ -265,9 +268,9 @@ function ResultPage() {
       out.height = Math.round(h * s);
       t.draw(out.getContext("2d")!, out.width, out.height, srcs, full);
       const r = await saveCanvas(out, `dazzlab-${t.id}-${Date.now()}.jpg`);
-      if (r === "downloaded") showHint("已保存");
+      if (r === "downloaded") showHint(tr("已保存", "Saved"));
     } catch {
-      showHint("保存失败，再试一次");
+      showHint(tr("保存失败，再试一次", "Save failed — try again"));
     } finally {
       setSaving(false);
     }
@@ -280,20 +283,20 @@ function ResultPage() {
     <main className="theme-paper flex min-h-[calc(100dvh-4rem)] flex-col px-4 pt-[max(env(safe-area-inset-top),1rem)] pb-6">
       <header className="flex items-center justify-between">
         <Link to="/album" className="-ml-2 flex items-center gap-0.5 px-2 py-1 font-mono text-[11px] text-muted-foreground">
-          <ChevronLeft className="size-4" /> 印样台
+          <ChevronLeft className="size-4" /> {tr("印样台", "Prints")}
         </Link>
-        <h1 className="font-serif text-lg font-bold">成品</h1>
-        <span className="w-12 text-right font-mono text-[10px] text-muted-foreground">{items.length} 张</span>
+        <h1 className="font-serif text-lg font-bold">{tr("成品", "Print")}</h1>
+        <span className="w-12 text-right font-mono text-[10px] text-muted-foreground">{tr(`${items.length} 张`, `${items.length} photo${items.length === 1 ? "" : "s"}`)}</span>
       </header>
 
       {!items.length ? (
         <div className="mt-24 text-center">
-          <p className="font-serif">还没有选照片</p>
-          <Link to="/album" className="mt-4 inline-block rounded-full bg-primary px-5 py-2.5 text-sm text-primary-foreground">去印样台选片</Link>
+          <p className="font-serif">{tr("还没有选照片", "No photos selected")}</p>
+          <Link to="/album" className="mt-4 inline-block rounded-full bg-primary px-5 py-2.5 text-sm text-primary-foreground">{tr("去印样台选片", "Pick photos in Prints")}</Link>
         </div>
       ) : (
         <>
-          <nav aria-label="模板" className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pt-1.5 pb-1 [scrollbar-width:none]">
+          <nav aria-label={tr("模板", "Templates")} className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pt-1.5 pb-1 [scrollbar-width:none]">
             {TEMPLATES.map((x) => {
               const able = usable(x, cats);
               return (
@@ -301,10 +304,10 @@ function ResultPage() {
                   className={cn("relative shrink-0 rounded-2xl border px-3 py-2 text-left transition-colors",
                     x.id === tid ? "border-foreground bg-foreground text-background" : "border-border bg-card",
                     !able && "opacity-40")}>
-                  <span className="block font-serif text-[13px] font-bold">{x.name}</span>
-                  <span className="block font-mono text-[9px] opacity-60">{x.instantOnly ? "仅拍立得" : `${x.min === x.max ? x.min : `${x.min}–${x.max}`}张`}</span>
+                  <span className="block font-serif text-[13px] font-bold">{tname(x)}</span>
+                  <span className="block font-mono text-[9px] opacity-60">{x.instantOnly ? tr("仅拍立得", "Instant only") : `${x.min === x.max ? x.min : `${x.min}–${x.max}`}${tr("张", x.max === 1 ? " photo" : " photos")}`}</span>
                   <span className="absolute -top-1.5 -right-1 flex gap-0.5">
-                    {(x.id === rec || x.ai) && <AiMark className="size-3.5" label={x.id === rec ? "AI 推荐" : "AI 配色"} />}
+                    {(x.id === rec || x.ai) && <AiMark className="size-3.5" label={x.id === rec ? tr("AI 推荐", "AI pick") : tr("AI 配色", "AI colors")} />}
                     {x.pro && <ProMark inline className="size-3.5" />}
                   </span>
                 </button>
@@ -316,23 +319,23 @@ function ResultPage() {
             {ok ? (
               <div className="relative mx-auto overflow-hidden bg-muted shadow-sm" style={{ aspectRatio: `${w} / ${h}`, maxHeight: "60dvh" }}>
                 <canvas ref={canvas} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
-                  className={cn("size-full", t.id === "halfframe" && "touch-none cursor-ew-resize", t.id === "collage" && "touch-none cursor-grab")} aria-label={`${t.name}预览`} />
+                  className={cn("size-full", t.id === "halfframe" && "touch-none cursor-ew-resize", t.id === "collage" && "touch-none cursor-grab")} aria-label={tr(`${t.name}预览`, `${t.en} preview`)} />
                 {!imgs && <Loader2 className="absolute inset-0 m-auto size-6 animate-spin text-muted-foreground" />}
                 {imgs && aiBusy && (
                   <span className="absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full bg-background/80 px-2.5 py-1 font-mono text-[10px] backdrop-blur-sm">
-                    <AiMark className="size-3" />AI 看图选图案中<Loader2 className="size-3 animate-spin" />
+                    <AiMark className="size-3" />{tr("AI 看图选图案中", "AI is picking doodles")}<Loader2 className="size-3 animate-spin" />
                   </span>
                 )}
               </div>
             ) : (
               <div className="grid aspect-[3/4] place-items-center rounded-xl bg-muted px-8 text-center text-[13px] text-muted-foreground">
-                {t.name}{blockReason(t, cats)}，换一个模板试试
+                {tr(`${t.name}${blockReason(t, cats)}，换一个模板试试`, `${t.en} ${blockReason(t, cats, "en")} — try another template`)}
               </div>
             )}
             <div className="mt-2 flex items-center justify-between">
               <p className="font-mono text-[10px] text-muted-foreground">
-                {t.id === "halfframe" ? "左右拖动照片调整裁切 · 竖拍效果更好" : t.id === "collage" ? "拖动照片调整取景 · 双指或滚轮缩放" : t.en}
-                {t.id === rec && " · AI 推荐"}
+                {t.id === "halfframe" ? tr("左右拖动照片调整裁切 · 竖拍效果更好", "Drag sideways to crop · portrait shots work best") : t.id === "collage" ? tr("拖动照片调整取景 · 双指或滚轮缩放", "Drag to frame · pinch or scroll to zoom") : t.en}
+                {t.id === rec && tr(" · AI 推荐", " · AI pick")}
               </p>
               {items.some((i) => i.photo.origin === "album") && <ApproxTag />}
             </div>
@@ -340,60 +343,60 @@ function ResultPage() {
 
           <section className="mt-3 space-y-3 rounded-2xl bg-card p-3">
             {t.id === "solo" && (
-              <Field label="手绘线条">
+              <Field label={tr("手绘线条", "Hand-drawn lines")}>
                 <div className="flex items-center gap-2">
                   <span className="flex items-center gap-1 text-[12px] text-muted-foreground">
                     <AiMark className="size-3.5" />
-                    {sState?.plan.source === "ai" ? "AI 看图选的图案和配色" : aiBusy ? "AI 正在看图…" : "本地配色（AI 未连上）"}
+                    {sState?.plan.source === "ai" ? tr("AI 看图选的图案和配色", "Doodles and colors picked by AI") : aiBusy ? tr("AI 正在看图…", "AI is looking…") : tr("本地配色（AI 未连上）", "Local colors (AI offline)")}
                   </span>
-                  <button type="button" onClick={() => set("seed", opts.seed + 1)} disabled={!sState} className={cn(chip(false), "ml-auto flex items-center gap-1 disabled:opacity-50")}><Shuffle className="size-3" />换一组</button>
+                  <button type="button" onClick={() => set("seed", opts.seed + 1)} disabled={!sState} className={cn(chip(false), "ml-auto flex items-center gap-1 disabled:opacity-50")}><Shuffle className="size-3" />{tr("换一组", "Shuffle")}</button>
                 </div>
               </Field>
             )}
             {t.id === "solo" && (
-              <Field label={soloFrame ? "背景 · 拍立得相纸放在纸上" : "背景"}>
+              <Field label={soloFrame ? tr("背景 · 拍立得相纸放在纸上", "Background · Polaroid laid on paper") : tr("背景", "Background")}>
                 <div className="flex gap-2">
-                  <button type="button" aria-pressed={!opts.soloDark} onClick={() => set("soloDark", false)} className={chip(!opts.soloDark)}>浅色</button>
-                  <button type="button" aria-pressed={opts.soloDark} onClick={() => set("soloDark", true)} className={chip(opts.soloDark)}>深色</button>
+                  <button type="button" aria-pressed={!opts.soloDark} onClick={() => set("soloDark", false)} className={chip(!opts.soloDark)}>{tr("浅色", "Light")}</button>
+                  <button type="button" aria-pressed={opts.soloDark} onClick={() => set("soloDark", true)} className={chip(opts.soloDark)}>{tr("深色", "Dark")}</button>
                 </div>
               </Field>
             )}
             {t.id === "halfframe" && (
               <div className="flex gap-2">
-                <button type="button" onClick={() => set("swap", !opts.swap)} className={chip(false)}>左右互换</button>
-                <button type="button" onClick={() => set("crops", [0.5, 0.5])} className={chip(false)}>裁切居中</button>
+                <button type="button" onClick={() => set("swap", !opts.swap)} className={chip(false)}>{tr("左右互换", "Swap sides")}</button>
+                <button type="button" onClick={() => set("crops", [0.5, 0.5])} className={chip(false)}>{tr("裁切居中", "Center crop")}</button>
               </div>
             )}
             {t.id === "polaroid" && (
               <>
-                <p className="font-mono text-[10px] text-muted-foreground">{FORMATS.find((f) => f.id === opts.format)?.label} 相纸 · {opts.frame ? "黑边" : "白边"} · 跟随拍摄的相机</p>
-                <Field label="日期印章">
+                <p className="font-mono text-[10px] text-muted-foreground">{FORMATS.find((f) => f.id === opts.format)?.label} {tr("相纸", "film")} · {opts.frame ? tr("黑边", "black frame") : tr("白边", "white frame")} · {tr("跟随拍摄的相机", "matches the camera used")}</p>
+                <Field label={tr("日期印章", "Date stamp")}>
                   <div className="flex items-center gap-2">
                     <input type="date" value={opts.date} onChange={(e) => e.target.value && set("date", e.target.value)} className="bg-transparent font-mono text-[13px] outline-none" />
-                    <button type="button" onClick={() => set("date", defaultOptions().date)} className="ml-auto rounded-full border border-border px-2 py-0.5 text-[11px]">今天</button>
+                    <button type="button" onClick={() => set("date", defaultOptions().date)} className="ml-auto rounded-full border border-border px-2 py-0.5 text-[11px]">{tr("今天", "Today")}</button>
                   </div>
                 </Field>
-                <Field label="地点 · 打字机字">
+                <Field label={tr("地点 · 打字机字", "Place · typewriter")}>
                   <input value={opts.caption} onChange={(e) => set("caption", e.target.value)} maxLength={40}
-                    className="w-full bg-transparent text-[15px] outline-none [font-family:'Special_Elite',serif]" placeholder="照片里没有地点信息，手动写一个" />
+                    className="w-full bg-transparent text-[15px] outline-none [font-family:'Special_Elite',serif]" placeholder={tr("照片里没有地点信息，手动写一个", "No location in the photo — type one")} />
                 </Field>
               </>
             )}
             {t.id === "collage" && (
               <>
-                <Field label={selCrop ? `第 ${selSlot! + 1} 张 · 缩放` : "取景"}>
+                <Field label={selCrop ? tr(`第 ${selSlot! + 1} 张 · 缩放`, `Photo ${selSlot! + 1} · zoom`) : tr("取景", "Framing")}>
                   {selCrop ? (
                     <div className="flex items-center gap-3">
-                      <input type="range" min={1} max={MAX_ZOOM} step={0.01} value={selCrop.zoom} aria-label="缩放"
+                      <input type="range" min={1} max={MAX_ZOOM} step={0.01} value={selCrop.zoom} aria-label={tr("缩放", "Zoom")}
                         onChange={(e) => setCrop(selSlot!, { ...selCrop, zoom: +e.target.value })} className="flex-1 accent-[var(--primary)]" />
                       <span className="w-10 text-right font-mono text-[11px] tabular-nums">{selCrop.zoom.toFixed(1)}×</span>
                     </div>
                   ) : (
-                    <p className="text-[12px] text-muted-foreground">点一张照片后可以拖动、缩放取景</p>
+                    <p className="text-[12px] text-muted-foreground">{tr("点一张照片后可以拖动、缩放取景", "Tap a photo, then drag or zoom to frame it")}</p>
                   )}
                 </Field>
                 <div className="flex gap-2">
-                  <button type="button" onClick={() => { set("ccrops", [null, null, null, null]); setSelSlot(null); }} className={chip(false)}>取景复位</button>
+                  <button type="button" onClick={() => { set("ccrops", [null, null, null, null]); setSelSlot(null); }} className={chip(false)}>{tr("取景复位", "Reset framing")}</button>
                 </div>
               </>
             )}
@@ -401,9 +404,9 @@ function ResultPage() {
 
           <button type="button" onClick={save} disabled={saving || !imgs || !ok}
             className="mt-4 flex items-center justify-center gap-2 rounded-full bg-primary py-3 font-medium text-primary-foreground disabled:opacity-60">
-            {saving && <Loader2 className="size-4 animate-spin" />}保存到相册
+            {saving && <Loader2 className="size-4 animate-spin" />}{tr("保存到相册", "Save to photos")}
           </button>
-          <Link to="/album" className="mt-2 text-center text-[12px] text-muted-foreground underline-offset-2 hover:underline">回印样台再做一张</Link>        </>
+          <Link to="/album" className="mt-2 text-center text-[12px] text-muted-foreground underline-offset-2 hover:underline">{tr("回印样台再做一张", "Make another in Prints")}</Link>        </>
       )}
     </main>
   );

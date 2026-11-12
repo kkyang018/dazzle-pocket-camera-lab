@@ -1,7 +1,9 @@
 import { Pin } from "lucide-react";
 import { AiBadge, ProMark } from "@/components/app/marks";
 import { useLongPress } from "@/hooks/use-long-press";
-import type { Camera } from "@/lib/cameras";
+import { cameraName, type Camera } from "@/lib/cameras";
+import { useApp } from "@/lib/app-state";
+import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 export function CameraCard({
@@ -20,6 +22,8 @@ export function CameraCard({
   onTogglePin: () => void;
 }) {
   const press = useLongPress({ onLongPress: onTogglePin });
+  const { lang } = useApp();
+  const t = useT();
 
   return (
     <div className="relative w-[78px] shrink-0 snap-start">
@@ -28,7 +32,7 @@ export function CameraCard({
         {...press}
         onClick={onSelect}
         aria-pressed={selected}
-        aria-label={`${camera.name}${camera.pro ? "，Pro" : ""}${recommended ? "，AI推荐" : ""}${pinned ? "，已置顶" : ""}`}
+        aria-label={`${cameraName(camera, lang)}${camera.pro ? t("，Pro", ", Pro") : ""}${recommended ? t("，AI推荐", ", AI pick") : ""}${pinned ? t("，已置顶", ", pinned") : ""}`}
         className={cn(
           "touch-hold flex w-full flex-col items-center rounded-2xl border px-1 pt-5 pb-2 transition-all active:scale-95",
           selected
@@ -50,7 +54,7 @@ export function CameraCard({
         />
         <span className="mt-1.5 flex max-w-full items-center gap-0.5 text-[11px] leading-tight">
           {pinned && <Pin className="size-2.5 shrink-0 fill-current text-primary" strokeWidth={2} />}
-          <span className="truncate">{camera.name}</span>
+          <span className="truncate">{cameraName(camera, lang)}</span>
         </span>
       </button>
       {recommended && <AiBadge className="pointer-events-none absolute top-1.5 left-1.5" />}

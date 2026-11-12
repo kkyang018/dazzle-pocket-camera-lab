@@ -17,6 +17,9 @@ import { forgetDeveloped } from "./templates/sources";
 
 // 全局原型状态：只存在内存里（不使用 localStorage）。
 type AppState = {
+  /** 界面语言（中 / 英） */
+  lang: "zh" | "en";
+  setLang: (l: "zh" | "en") => void;
   quietMode: boolean;
   setQuietMode: (v: boolean) => void;
   hint: { id: number; text: string; kind: HintKind } | null;
@@ -89,6 +92,9 @@ function release(p: Photo | null) {
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [quietMode, setQuietMode] = useState(false);
+  const [lang, setLang] = useState<"zh" | "en">("zh");
+  // 页面语言标记跟着切换（读屏和浏览器翻译用）
+  useEffect(() => { document.documentElement.lang = lang === "en" ? "en" : "zh-CN"; }, [lang]);
   const [hint, setHint] = useState<AppState["hint"]>(null);
   const [photo, setPhotoState] = useState<Photo | null>(null);
   const [cameraId, setCameraId] = useState<string | null>(null);
@@ -233,6 +239,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   return (
     <AppContext.Provider value={{
+        lang,
+        setLang,
         quietMode,
         setQuietMode,
         hint,

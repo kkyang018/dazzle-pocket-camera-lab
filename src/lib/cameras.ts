@@ -16,11 +16,36 @@ import instantGo from "@/assets/cameras/instant-go.webp";
 
 export type CameraCategory = "film" | "ccd" | "instant";
 
-export const CATEGORIES: { id: CameraCategory; label: string }[] = [
-  { id: "film", label: "胶片" },
-  { id: "ccd", label: "CCD" },
-  { id: "instant", label: "拍立得" },
+export const CATEGORIES: { id: CameraCategory; label: string; labelEn: string }[] = [
+  { id: "film", label: "胶片", labelEn: "Film" },
+  { id: "ccd", label: "CCD", labelEn: "CCD" },
+  { id: "instant", label: "拍立得", labelEn: "Instant" },
 ];
+
+/** 英文界面用的相机名和风格说明（按 id 查；名字本来就是英文的不用写） */
+const CAMERA_EN: Record<string, { name?: string; tagline: string }> = {
+  gold200: { tagline: "Kodak warm gold · creamy yellow" },
+  brown400: { tagline: "Vintage brown · cinematic" },
+  portra160: { tagline: "Bright & muted · airy" },
+  hp5: { name: "HP5 B&W", tagline: "Street mono · coarse grain" },
+  cpm35: { tagline: "High-contrast film · gold date stamp" },
+  ixus95: { tagline: "Cool fair skin · crisp flash" },
+  cybert: { tagline: "Crisp texture · warm-cool split" },
+  glowdv: { tagline: "Glowing oil-paint · soft bloom" },
+  pinkccd: { name: "Pink CCD", tagline: "Candy pink · sweet & bright" },
+  date98: { tagline: "Orange date · warm film" },
+  sx70: { tagline: "Folding Polaroid · faded warm" },
+  instaxmini: { tagline: "White border · clear & cool" },
+  wide300: { tagline: "Wide print · soft & muted" },
+  dusk: { tagline: "Sunset leak · black frame" },
+  rainbow: { tagline: "Rainbow classic · rich retro" },
+};
+export const cameraName = (c: Pick<Camera, "id" | "name">, lang: "zh" | "en") => (lang === "en" ? (CAMERA_EN[c.id]?.name ?? c.name) : c.name);
+export const cameraTagline = (c: Pick<Camera, "id" | "tagline">, lang: "zh" | "en") => (lang === "en" ? (CAMERA_EN[c.id]?.tagline ?? c.tagline) : c.tagline);
+export const categoryLabel = (id: CameraCategory, lang: "zh" | "en") => {
+  const c = CATEGORIES.find((x) => x.id === id)!;
+  return lang === "en" ? c.labelEn : c.label;
+};
 
 type RGB = [number, number, number];
 export type FlashTone = "cool" | "warm" | "neutral" | "soft";

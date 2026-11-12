@@ -2,19 +2,22 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { CameraCard } from "@/components/app/camera-card";
-import { PRO_HINT } from "@/components/app/marks";
+import { proHint } from "@/components/app/marks";
 import { PhotoPreview } from "@/components/app/photo-preview";
 import { usePhotoBase } from "@/hooks/use-photo-base";
 import { useApp } from "@/lib/app-state";
 import {
   CAMERAS,
   CATEGORIES,
+  cameraName,
+  categoryLabel,
   getCamera,
   orderCameras,
   recommend,
   scoreCamera,
   type CameraCategory,
 } from "@/lib/cameras";
+import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/cameras")({
@@ -32,7 +35,8 @@ export const Route = createFileRoute("/cameras")({
 });
 
 function CamerasPage() {
-  const { photo, cameraId, setCameraId, pinned, togglePin, showHint } = useApp();
+  const { photo, cameraId, setCameraId, pinned, togglePin, showHint, lang } = useApp();
+  const t = useT();
   const navigate = useNavigate();
   const base = usePhotoBase(photo);
   const camera = getCamera(cameraId);
@@ -71,10 +75,10 @@ function CamerasPage() {
   if (!photo) {
     return (
       <main className="flex min-h-[calc(100dvh-5rem)] flex-col items-center justify-center px-8 text-center">
-        <p className="font-serif text-lg">还没有选照片</p>
-        <p className="mt-1.5 text-xs text-muted-foreground">先回 Lab 选一张，再来挑相机</p>
+        <p className="font-serif text-lg">{t("还没有选照片", "No photo yet")}</p>
+        <p className="mt-1.5 text-xs text-muted-foreground">{t("先回 Lab 选一张，再来挑相机", "Pick one in Lab first, then choose a camera")}</p>
         <Link to="/" className="mt-6 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground">
-          去选照片
+          {t("去选照片", "Choose a photo")}
         </Link>
       </main>
     );
@@ -85,7 +89,7 @@ function CamerasPage() {
       {/* 常驻、克制的 Pro 横条 */}
       <button
         type="button"
-        onClick={() => showHint(PRO_HINT, "pro")}
+        onClick={() => showHint(proHint(lang), "pro")}
         className="flex h-8 w-full shrink-0 items-center justify-between rounded-full border border-pro/30 bg-pro/[0.07] px-3 text-[11px] text-foreground/85"
       >
         <span className="flex items-center gap-1.5">
@@ -94,7 +98,7 @@ function CamerasPage() {
           </span>
           <span className="font-mono tracking-wide">Dazz Pro</span>
           <span className="text-muted-foreground">·</span>
-          <span>解锁全部相机</span>
+          <span>{t("解锁全部相机", "Unlock all cameras")}</span>
         </span>
         <ChevronRight className="size-3.5 text-pro" />
       </button>
@@ -105,9 +109,9 @@ function CamerasPage() {
           className="-ml-2 flex items-center gap-0.5 rounded-full px-2 py-1 font-mono text-[11px] text-muted-foreground"
         >
           <ChevronLeft className="size-4" />
-          换照片
+          {t("换照片", "Change photo")}
         </Link>
-        <h1 className="font-serif text-lg font-bold">相机陈列</h1>
+        <h1 className="font-serif text-lg font-bold">{t("相机陈列", "Cameras")}</h1>
         <span className="w-14 text-right font-mono text-[10px] tracking-[0.18em] text-muted-foreground">02</span>
       </header>
 
@@ -118,7 +122,7 @@ function CamerasPage() {
         className="mt-2 min-h-0 flex-1 max-h-[460px]"
       />
 
-      <div role="tablist" aria-label="相机分类" className="mt-3 shrink-0 flex gap-5 border-b border-hairline">
+      <div role="tablist" aria-label={t("相机分类", "Camera types")} className="mt-3 shrink-0 flex gap-5 border-b border-hairline">
         {CATEGORIES.map((c) => (
           <button
             key={c.id}
@@ -131,7 +135,7 @@ function CamerasPage() {
               tab === c.id ? "border-primary font-medium text-foreground" : "border-transparent text-muted-foreground",
             )}
           >
-            {c.label}
+            {categoryLabel(c.id, lang)}
           </button>
         ))}
       </div>
@@ -140,7 +144,7 @@ function CamerasPage() {
         key={tab}
         ref={rowRef}
         role="tabpanel"
-        aria-label={CATEGORIES.find((c) => c.id === tab)?.label}
+        aria-label={categoryLabel(tab, lang)}
         className="scrollbar-none -mx-5 mt-2 flex shrink-0 snap-x scroll-px-5 gap-2.5 overflow-x-auto px-5 py-1 [overflow-anchor:none]"
       >
         {row.map((c) => (
@@ -152,18 +156,18 @@ function CamerasPage() {
             pinned={pinned.includes(c.id)}
             onSelect={() => {
               setCameraId(c.id);
-              if (c.pro) showHint(PRO_HINT, "pro");
+              if (c.pro) showHint(proHint(lang), "pro");
             }}
             onTogglePin={() => {
               const now = togglePin(c.id);
-              showHint(now ? `已置顶 · ${c.name}` : `已取消置顶 · ${c.name}`);
+              showHint(now ? t(`已置顶 · ${c.name}`, `Pinned · ${cameraName(c, "en")}`) : t(`已取消置顶 · ${c.name}`, `Unpinned · ${cameraName(c, "en")}`));
             }}
           />
         ))}
       </div>
 
       <p className="mt-1.5 text-center font-mono text-[10px] leading-relaxed text-muted-foreground">
-        长按相机置顶 · 长按照片看原图
+        {t("长按相机置顶 · 长按照片看原图", "Hold a camera to pin · hold the photo to see the original")}
       </p>
 
       <div className="shrink-0 pt-2.5 pb-2">
@@ -175,15 +179,15 @@ function CamerasPage() {
         >
           {camera ? (
             <>
-              进入暗房
-              <span className="font-mono text-[11px] opacity-70">· {camera.name}</span>
+              {t("进入暗房", "Enter darkroom")}
+              <span className="font-mono text-[11px] opacity-70">· {cameraName(camera, lang)}</span>
             </>
           ) : (
-            "先选一台相机"
+            t("先选一台相机", "Pick a camera first")
           )}
         </button>
         {camera && (
-          <p className="mt-1.5 text-center font-mono text-[10px] text-muted-foreground">暗房里可以调曝光和色温 · AI 建议 · 显影</p>
+          <p className="mt-1.5 text-center font-mono text-[10px] text-muted-foreground">{t("暗房里可以调曝光和色温 · AI 建议 · 显影", "Darkroom: exposure & temperature · AI tips · develop")}</p>
         )}
       </div>
     </main>

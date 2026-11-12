@@ -65,7 +65,7 @@ function drawSolo(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOption
   drawSoloCard(ctx, W, H, imgs[0]!, o.solo, o.seed, { dark: o.soloDark, frame: o.soloFrame });
 }
 
-// ── ② 半格胶片：两张竖裁并排、满版、片基色分隔条（窄、不纯黑、边缘不齐）、轻颗粒偏暖 ───
+// ── ② 半格胶片：两张竖裁并排、满版、片基色分隔条（窄、不纯黑、边缘不齐）、轻颗粒 ───
 const HALF_BASE = "#2a2420"; // 片基色：深棕灰，不是纯黑
 function drawHalf(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOptions) {
   const gap = W * (47 / 1500); // 1500 宽画布上 47px，导出时等比放大
@@ -76,11 +76,7 @@ function drawHalf(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOption
   const crops = o.swap ? [o.crops[1], o.crops[0]] : o.crops;
   // 照片各往中间多画一点，分隔条压上去后边缘才有起伏
   pair.forEach((img, i) => cover(ctx, img, i === 0 ? 0 : fw + gap - gap * 0.3, 0, fw + gap * 0.3, H, crops[i]));
-  ctx.save();
-  ctx.globalCompositeOperation = "soft-light";
-  ctx.fillStyle = "rgba(255,170,90,0.22)";
-  ctx.fillRect(0, 0, W, H);
-  ctx.restore();
+  // 不再叠暖色滤镜：照片保持暗房冲出来的颜色
   // 分隔条：边缘是细密的颗粒 / 小锯齿（像胶片片基的毛边），不是波浪；照片交界处不加阴影
   const r = rng(17);
   const step = Math.max(1, gap * 0.04), amp = gap * 0.02;
@@ -160,10 +156,12 @@ export function getTemplate(id: TemplateId) {
 }
 
 /** 这组照片能不能用该模板；不能用时返回原因 */
-export function blockReason(t: TemplateDef, categories: (CameraCategory | null)[]): string | null {
-  if (categories.length < t.min || categories.length > t.max) return `需要选 ${t.min === t.max ? t.min : `${t.min}–${t.max}`} 张`;
-  if (t.instantOnly && categories[0] !== "instant") return "只有拍立得相机拍的照片能做";
-  if (t.noInstant && categories.includes("instant")) return "不能放拍立得照片（拍立得只能做手绘单张或拍立得）";
+export function blockReason(t: TemplateDef, categories: (CameraCategory | null)[], lang: "zh" | "en" = "zh"): string | null {
+  const range = t.min === t.max ? `${t.min}` : `${t.min}–${t.max}`;
+  if (categories.length < t.min || categories.length > t.max) return lang === "en" ? `needs ${range} photos` : `需要选 ${range} 张`;
+  if (t.instantOnly && categories[0] !== "instant") return lang === "en" ? "only for photos from instant cameras" : "只有拍立得相机拍的照片能做";
+  if (t.noInstant && categories.includes("instant"))
+    return lang === "en" ? "can't use instant photos (instant photos work with Hand-drawn or Polaroid)" : "不能放拍立得照片（拍立得只能做手绘单张或拍立得）";
   return null;
 }
 export function usable(t: TemplateDef, categories: (CameraCategory | null)[]) {

@@ -5,6 +5,7 @@ import type { Preset } from "@/lib/cameras";
 import type { Photo } from "@/lib/photo";
 import { renderWithPreset } from "@/lib/render";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
 
 /** 大预览：实时渲染当前相机效果；长按临时看原图。 */
 export function PhotoPreview({
@@ -19,6 +20,7 @@ export function PhotoPreview({
   className?: string;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const t = useT();
   const [ready, setReady] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
   const press = useLongPress({
@@ -45,7 +47,7 @@ export function PhotoPreview({
     <div
       {...press}
       role="img"
-      aria-label={showOriginal ? "原图" : preset ? "当前相机效果预览" : "照片预览"}
+      aria-label={showOriginal ? t("原图", "Original") : preset ? t("当前相机效果预览", "Camera look preview") : t("照片预览", "Photo preview")}
       className={cn(
         "touch-hold relative flex items-center justify-center",
         className,
@@ -69,7 +71,7 @@ export function PhotoPreview({
       <div className="pointer-events-none absolute top-2.5 right-2.5">
         {showOriginal ? (
           <span className="inline-flex items-center rounded-full bg-background/70 px-2 py-0.5 font-mono text-[10px] text-foreground backdrop-blur-sm">
-            原图
+            {t("原图", "Original")}
           </span>
         ) : (
           preset && <ApproxTag />
