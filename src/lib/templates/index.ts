@@ -31,8 +31,6 @@ export type TemplateOptions = {
   ccrops: (Crop | null)[];
   /** 拼图：每张照片的主体位置（0–1），用于初始取景 */
   cfocus: ([number, number] | null)[];
-  /** 拼图：拍立得照片的整张相纸（不裁剪，直接放） */
-  cframed: (Img | null)[];
 };
 
 export type TemplateDef = {
@@ -45,6 +43,8 @@ export type TemplateDef = {
   ai?: boolean;
   /** 只有拍立得相机拍的照片能用 */
   instantOnly?: boolean;
+  /** 拍立得相机拍的照片不能用 */
+  noInstant?: boolean;
   size: (o: TemplateOptions) => [number, number];
   draw: (ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOptions) => void;
 };
@@ -127,14 +127,14 @@ function drawPolaroid(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOp
 
 // ── ④ 拼图（无贴纸）：双图 / 三图竖排、四宫格；版式与背景见 src/lib/collage ─────
 function drawCollageTemplate(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOptions) {
-  drawCollage(ctx, W, H, imgs, { crops: o.ccrops, focus: o.cfocus, framed: o.cframed, background: null });
+  drawCollage(ctx, W, H, imgs, { crops: o.ccrops, focus: o.cfocus, background: null });
 }
 
 export const TEMPLATES: TemplateDef[] = [
   { id: "solo", name: "手绘单张", en: "Hand-drawn", min: 1, max: 1, ai: true, size: () => [1080, 1440], draw: drawSolo },
   { id: "halfframe", name: "半格胶片", en: "Half-Frame", min: 2, max: 2, size: () => [1500, 1040], draw: drawHalf },
   { id: "polaroid", name: "拍立得", en: "Polaroid", min: 1, max: 1, instantOnly: true, size: (o) => POLAROID[o.format].card, draw: drawPolaroid },
-  { id: "collage", name: "拼图", en: "Collage", min: 2, max: 4, size: () => [1080, Math.round((1080 * COLLAGE_CANVAS[1]) / COLLAGE_CANVAS[0])], draw: drawCollageTemplate },
+  { id: "collage", name: "拼图", en: "Collage", min: 2, max: 4, noInstant: true, size: () => [1080, Math.round((1080 * COLLAGE_CANVAS[1]) / COLLAGE_CANVAS[0])], draw: drawCollageTemplate },
 ];
 
 export function getTemplate(id: TemplateId) {
@@ -145,6 +145,7 @@ export function getTemplate(id: TemplateId) {
 export function blockReason(t: TemplateDef, categories: (CameraCategory | null)[]): string | null {
   if (categories.length < t.min || categories.length > t.max) return `需要选 ${t.min === t.max ? t.min : `${t.min}–${t.max}`} 张`;
   if (t.instantOnly && categories[0] !== "instant") return "只有拍立得相机拍的照片能做";
+  if (t.noInstant && categories.includes("instant")) return "不能放拍立得照片";
   return null;
 }
 export function usable(t: TemplateDef, categories: (CameraCategory | null)[]) {
@@ -169,6 +170,6 @@ export function defaultOptions(place: string | null = null): TemplateOptions {
   return {
     caption: place ?? "", date, frame: 0, format: "mini", crops: [0.5, 0.5], swap: false, seed: 1,
     solo: null, soloDark: false, soloFrame: null,
-    ccrops: [null, null, null, null], cfocus: [null, null, null, null], cframed: [null, null, null, null],
+    ccrops: [null, null, null, null], cfocus: [null, null, null, null],
   };
 }

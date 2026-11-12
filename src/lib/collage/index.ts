@@ -95,19 +95,6 @@ function drawCropped(ctx: Ctx, img: Img, r: Rect, c: Crop) {
   ctx.drawImage(img, sx, sy, r.w / g.k, r.h / g.k, r.x, r.y, r.w, r.h);
 }
 
-/**
- * 拍立得：整张相纸不裁剪，按原比例放在槽位中心，面积和普通照片差不多；
- * 但不能盖到相邻的照片上（最多伸进间距的 40%）。
- */
-export function polaroidRect(slot: Rect, card: { width: number; height: number }, gap: { x: number; y: number }): Rect {
-  const ar = card.width / card.height;
-  let w = Math.sqrt(slot.w * slot.h * ar), h = w / ar;
-  const maxW = slot.w + gap.x * 0.8, maxH = slot.h + gap.y * 0.8;
-  const s = Math.min(1, maxW / w, maxH / h);
-  w *= s; h *= s;
-  return { x: slot.x + (slot.w - w) / 2, y: slot.y + (slot.h - h) / 2, w, h };
-}
-
 /** 照片"适不适合做背景"的分数：颜色明显、明暗适中、层次丰富的更好 */
 export function backgroundScore(img: Img) {
   const c = document.createElement("canvas");
@@ -186,8 +173,6 @@ export type CollageInput = {
   crops: (Crop | null)[];
   /** 主体位置（0–1），用于初始取景 */
   focus: ([number, number] | null)[];
-  /** 拍立得照片的整张相纸；有它时这一格不裁剪，直接放相纸 */
-  framed: (Img | null)[];
   /** 用哪一张做背景（null = 自动挑） */
   background: number | null;
 };
@@ -201,14 +186,6 @@ export function drawCollage(ctx: Ctx, W: number, H: number, imgs: Img[], input: 
   const n = n4(imgs.length);
   const bg = input.background ?? pickBackground(imgs.slice(0, n));
   drawCollageBackground(ctx, W, H, imgs[bg] ?? imgs[0]!);
-  const layout = COLLAGE_LAYOUTS[n];
-  const rects = collageRects(W, H, n, layout);
-  imgs.slice(0, n).forEach((img, i) => {
-    const r = rects[i]!;
-    const card = input.framed[i];
-    if (card) {
-      const p = polaroidRect(r, card, { x: W * layout.gapX || W * 0.05, y: H * layout.gapY });
-      ctx.drawImage(card, p.x, p.y, p.w, p.h);
-    } else drawCropped(ctx, img, r, slotCrop(input, img, r, i));
-  });
+  const rects = collageRects(W, H, n);
+  imgs.slice(0, n).forEach((img, i) => drawCropped(ctx, img, rects[i]!, slotCrop(input, img, rects[i]!, i)));
 }

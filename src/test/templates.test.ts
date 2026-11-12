@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TEMPLATES, blockReason, defaultOptions, getTemplate, recommendTemplate, stampText, usable } from "@/lib/templates";
-import { COLLAGE_LAYOUTS, clampCrop, collageRects, initialCrop, polaroidRect } from "@/lib/collage";
+import { COLLAGE_LAYOUTS, clampCrop, collageRects, initialCrop } from "@/lib/collage";
 
 describe("成品模板规则", () => {
   it("保留 4 款模板，拼图替换了拼图贴纸", () => expect(TEMPLATES.map((t) => t.id)).toEqual(["solo", "halfframe", "polaroid", "collage"]));
@@ -19,11 +19,11 @@ describe("成品模板规则", () => {
     expect(usable(p, ["film"])).toBe(false);
     expect(usable(p, [null])).toBe(false);
   });
-  it("拼图用 2–4 张，任何相机都能用", () => {
+  it("拼图用 2–4 张，不能放拍立得照片", () => {
     const c = getTemplate("collage");
     expect(blockReason(c, ["film"])).toBe("需要选 2–4 张");
-    expect(usable(c, ["film", "ccd"])).toBe(true);
-    expect(usable(c, ["film", "instant", "ccd", null])).toBe(true);
+    expect(usable(c, ["film", "ccd", null])).toBe(true);
+    expect(blockReason(c, ["film", "instant", "ccd"])).toBe("不能放拍立得照片");
   });
   it("半格只能正好 2 张：1 张和 3 张都不能用", () => {
     const h = getTemplate("halfframe");
@@ -85,14 +85,5 @@ describe("拼图版式", () => {
     const slot = { x: 0, y: 0, w: 300, h: 400 };
     const c = initialCrop({ width: 1600, height: 900 }, slot, [0.85, 0.3]);
     expect(c.cx).toBeGreaterThan(0.8);
-  });
-
-  it("拍立得相纸保持原比例、面积接近槽位，不盖到相邻照片", () => {
-    const slot = { x: 100, y: 100, w: 300, h: 400 };
-    const p = polaroidRect(slot, { width: 920, height: 1376 }, { x: 45, y: 35 });
-    close(p.w / p.h, 920 / 1376, 0.001);
-    expect(p.w).toBeLessThanOrEqual(slot.w + 45 * 0.8 + 0.01);
-    expect(p.h).toBeLessThanOrEqual(slot.h + 35 * 0.8 + 0.01);
-    close(p.x + p.w / 2, slot.x + slot.w / 2);
   });
 });

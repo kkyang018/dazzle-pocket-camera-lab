@@ -7,7 +7,6 @@ import { localPlan } from "@/lib/solo/plan";
 import { faceCenter, personOutline } from "@/lib/solo/segment";
 import type { SoloData } from "@/lib/solo/types";
 import { MAX_ZOOM, clampCrop, collageRects, coverGeometry, slotCrop, type Crop } from "@/lib/collage";
-import type { AlbumItem } from "@/lib/app-state";
 import { ChevronLeft, Loader2, Shuffle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AiMark, ApproxTag, ProMark } from "@/components/app/marks";
@@ -38,8 +37,6 @@ const EXPORT_LONG = 4000;
 const FORMATS: { id: PolaroidFormat; label: string }[] = [
   { id: "mini", label: "Mini" }, { id: "square", label: "Square" }, { id: "wide", label: "Wide" },
 ];
-/** 拍立得相机拍的照片（带相纸）：拼图里整张相纸直接放，不裁剪 */
-const isFramed = (i: AlbumItem) => i.category === "instant" && !!i.look?.frame;
 /** 发给 AI 的小图（长边 512） */
 function thumb(c: HTMLCanvasElement) {
   const s = Math.min(1, 512 / Math.max(c.width, c.height));
@@ -72,9 +69,8 @@ function ResultPage() {
   // 手绘单张：每组照片一份（人物描边 + 计划）；先出本地版，AI 回来后替换
   const [solo, setSolo] = useState<Record<string, SoloData>>({});
   const [soloBusy, setSoloBusy] = useState<Record<string, boolean>>({});
-  // 拼图：每组照片的主体位置（人脸）和拍立得相纸
+  // 拼图：每组照片的主体位置（人脸），用于初始取景
   const [focus, setFocus] = useState<Record<string, ([number, number] | null)[]>>({});
-  const [framed, setFramed] = useState<Record<string, (HTMLCanvasElement | null)[]>>({});
   const [selSlot, setSelSlot] = useState<number | null>(null);
   const callSolo = useServerFn(soloPlan);
   const t = getTemplate(tid);
@@ -123,7 +119,7 @@ function ResultPage() {
     return () => { alive = false; setSoloBusy((m) => ({ ...m, [ids]: false })); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [imgs, tid, ids]);
-  // 拼图：本机找每张照片的人脸，用于初始取景；拍立得照片另外取一份带相纸的
+  // 拼图：本机找每张照片的人脸，用于初始取景
   useEffect(() => {
     if (!imgs || tid !== "collage" || focus[ids]) return;
     let alive = true;
@@ -131,14 +127,6 @@ function ResultPage() {
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [imgs, tid, ids]);
-  useEffect(() => {
-    if (tid !== "collage" || framed[ids] || !items.some(isFramed)) return;
-    let alive = true;
-    void Promise.all(items.map((i) => (isFramed(i) ? developed(i, undefined, false) : Promise.resolve(null))))
-      .then((f) => alive && setFramed((m) => ({ ...m, [ids]: f })));
-    return () => { alive = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tid, ids]);
   useEffect(() => { setOpts((o) => ({ ...o, ccrops: [null, null, null, null] })); setSelSlot(null); }, [ids]);
   const sState = solo[ids];
   const aiBusy = tid === "solo" && !!soloBusy[ids];
@@ -147,8 +135,7 @@ function ResultPage() {
     solo: sState ?? null,
     soloFrame,
     cfocus: focus[ids] ?? [null, null, null, null],
-    cframed: framed[ids] ?? [null, null, null, null],
-  }), [opts, sState, soloFrame, focus, framed, ids]);
+  }), [opts, sState, soloFrame, focus, ids]);
   const fullRef = useRef(full);
   fullRef.current = full;
 
@@ -173,13 +160,13 @@ function ResultPage() {
     setTid(id);
   };
 
-  // ── 拼图取景：在槽位里拖动平移，双指 / 滚轮 / 滑杆缩放；拍立得相纸不裁剪，不能调 ──
+  // ── 拼图取景：在槽位里拖动平移，双指 / 滚轮 / 滑杆缩放 ──
   const n = takeCount(t, items.length);
   const rects = useMemo(() => (t.id === "collage" ? collageRects(w, h, n) : []), [t.id, w, h, n]);
   const cropOf = (i: number): Crop | null => {
     const im = imgs?.[i], r = rects[i];
     const f = fullRef.current;
-    return im && r ? slotCrop({ crops: f.ccrops, focus: f.cfocus, framed: f.cframed, background: null }, im, r, i) : null;
+    return im && r ? slotCrop({ crops: f.ccrops, focus: f.cfocus, background: null }, im, r, i) : null;
   };
   const setCrop = (i: number, c: Crop) => setOpts((o) => { const ccrops = [...o.ccrops]; ccrops[i] = clampCrop(c); return { ...o, ccrops }; });
   const pointers = useRef(new Map<number, { x: number; y: number }>());
@@ -188,7 +175,7 @@ function ResultPage() {
     const r = el.getBoundingClientRect(), k = r.width / w;
     const px = (e.clientX - r.left) / k, py = (e.clientY - r.top) / k;
     const i = rects.findIndex((q) => px >= q.x && px <= q.x + q.w && py >= q.y && py <= q.y + q.h);
-    return i >= 0 && !full.cframed[i] ? i : -1;
+    return i;
   };
   const restartGesture = () => {
     const g = gesture.current, pts = [...pointers.current.values()];
@@ -264,15 +251,11 @@ function ResultPage() {
     setSaving(true);
     try {
       const srcs = await Promise.all(items.slice(0, n).map((i) => exportSource(i, bare)));
-      // 拼图里的拍立得：导出时也用原图重新渲染整张相纸
-      const cframed = t.id === "collage"
-        ? await Promise.all(items.slice(0, n).map((i) => (isFramed(i) ? exportSource(i, false) : Promise.resolve(null))))
-        : full.cframed;
       const s = EXPORT_LONG / Math.max(w, h);
       const out = document.createElement("canvas");
       out.width = Math.round(w * s);
       out.height = Math.round(h * s);
-      t.draw(out.getContext("2d")!, out.width, out.height, srcs, { ...full, cframed });
+      t.draw(out.getContext("2d")!, out.width, out.height, srcs, full);
       const r = await saveCanvas(out, `dazzlab-${t.id}-${Date.now()}.jpg`);
       if (r === "downloaded") showHint("已保存");
     } catch {
@@ -282,7 +265,7 @@ function ResultPage() {
     }
   }
 
-  const selCrop = t.id === "collage" && selSlot != null && selSlot < n && !full.cframed[selSlot] ? cropOf(selSlot) : null;
+  const selCrop = t.id === "collage" && selSlot != null && selSlot < n ? cropOf(selSlot) : null;
   const chip = (on: boolean) => cn("rounded-full border px-3 py-1 text-[12px]", on ? "border-foreground bg-foreground text-background" : "border-border");
 
   return (
@@ -398,7 +381,7 @@ function ResultPage() {
                       <span className="w-10 text-right font-mono text-[11px] tabular-nums">{selCrop.zoom.toFixed(1)}×</span>
                     </div>
                   ) : (
-                    <p className="text-[12px] text-muted-foreground">点一张照片后可以拖动、缩放取景{full.cframed.some(Boolean) ? "；拍立得保留整张相纸，不裁剪" : ""}</p>
+                    <p className="text-[12px] text-muted-foreground">点一张照片后可以拖动、缩放取景</p>
                   )}
                 </Field>
                 <div className="flex gap-2">
