@@ -3,7 +3,7 @@
 
 /** 本地图案库里的图案 */
 export const MOTIF_KINDS = [
-  "moon", "sparkle", "star", "heart", "sun", "leaf", "flower", "cloud", "bird", "wave", "steam", "snowflake", "raindrop", "note",
+  "moon", "sparkle", "star", "starburst", "heart", "sun", "leaf", "flower", "cloud", "bird", "wave", "steam", "snowflake", "raindrop", "note",
 ] as const;
 export type MotifKind = (typeof MOTIF_KINDS)[number];
 

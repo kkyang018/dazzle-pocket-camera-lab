@@ -116,22 +116,68 @@ export function inkColor(hex: string, paper: string): string {
   return toHex(hslToRgb(h, s, Math.min(0.9, Math.max(0.2, l))));
 }
 
-/** 配色情绪：莫兰迪（柔和灰调）、高饱和、粉彩、深色 */
-export const MOODS = ["morandi", "vivid", "pastel", "deep"] as const;
+/**
+ * 配色情绪：莫兰迪（柔和灰调）、高饱和、复古深色纸、粉彩、取自照片、深色线条。
+ * 排序让"换一组"前几次就能看到差别很大的组合。
+ */
+export const MOODS = ["morandi", "vivid", "retro", "pastel", "photo", "deep"] as const;
 export type Mood = (typeof MOODS)[number];
 /** 色相搭配：邻近、互补、三角、分裂互补 */
 const HARMONIES: number[][] = [[0, 32, -28], [0, 180, 155], [0, 120, 240], [0, 150, 210]];
 
+/** 复古深色纸（参考复古色卡：深青、丝绒绿、咖啡、里昂蓝、茄紫、砖红） */
+const RETRO_PAPERS = ["#193D40", "#446242", "#5B3B1E", "#084973", "#3B2A4A", "#6E2A20"];
+/** 复古亮色线条：芥末黄、橙、藏红、奶油、豆沙粉、孔雀青、雾蓝、正红、橄榄 */
+const RETRO_INKS = ["#FFC20A", "#F3620F", "#D26E36", "#EAE1CB", "#D18E97", "#078D8C", "#BED4DD", "#DA0D1E", "#979E6C", "#E99E26"];
+
+/** 从照片取的颜色里挑：最有颜色的做纸张底色（调浅），其余做线条 */
+function photoMood(photoColors: string[], tone: Tone, dark: boolean, seed: number) {
+  const cs = photoColors.map((c) => rgbToHsl(toRgb(c) ?? [128, 128, 128])).filter(([, s]) => s > 0.12);
+  const pick = cs.length ? cs[(seed - 1) % cs.length]! : ([tone.hue, 0.35, 0.5] as [number, number, number]);
+  const paper = toHex(hslToRgb(pick[0], Math.min(0.5, Math.max(0.2, pick[1] * 0.75)), dark ? 0.16 : 0.8));
+  const others = cs.filter((c) => c !== pick).map(([h, s]) => hslToRgb(h, Math.max(0.45, s), 0.5));
+  while (others.length < 3) others.push(hslToRgb((pick[0] + 150 + others.length * 70) % 360, 0.6, 0.5));
+  return { paper, colors: others.slice(0, 3).map(toHex) };
+}
+
+/** 复古深色纸：选和照片主色色相差最远的那张深色纸（有对比），配亮色复古线条 */
+function retroMood(tone: Tone, seed: number) {
+  const ranked = [...RETRO_PAPERS].sort((a, b) =>
+    hueDist(rgbToHsl(toRgb(b)!)[0], tone.hue) - hueDist(rgbToHsl(toRgb(a)!)[0], tone.hue));
+  const paper = ranked[(seed - 1) % 2]!; // 对比最强的前两张轮换
+  const ph = rgbToHsl(toRgb(paper)!)[0];
+  const inks = [...RETRO_INKS]
+    .filter((c) => lum(toRgb(c)!) > 0.32)
+    .sort((a, b) => hueDist(rgbToHsl(toRgb(b)!)[0], ph) - hueDist(rgbToHsl(toRgb(a)!)[0], ph));
+  // 色相彼此拉开的 3 种
+  const colors: string[] = [];
+  for (const c of [...inks.slice(seed % 3), ...inks]) {
+    const h = rgbToHsl(toRgb(c)!)[0];
+    if (colors.every((x) => hueDist(rgbToHsl(toRgb(x)!)[0], h) > 35)) colors.push(c);
+    if (colors.length === 3) break;
+  }
+  return { paper, colors };
+}
+
 /**
  * 按"情绪 + 色相搭配"出一套线条色和纸张色，"换一组"（seed）会换到下一种组合。
  * 起始情绪看照片：照片鲜艳 → 先给莫兰迪；照片灰 → 先给高饱和。
+ * @param photoColors 照片里的主要颜色（"取自照片"情绪用）
  */
-export function schemePalette(baseHue: number, seed: number, tone: Tone, dark: boolean): { mood: Mood; colors: string[]; paper: string } {
+export function schemePalette(baseHue: number, seed: number, tone: Tone, dark: boolean, photoColors: string[] = []): { mood: Mood; colors: string[]; paper: string } {
   const start = tone.sat > 0.28 ? 0 : 1;
   const mood = MOODS[(start + seed - 1) % MOODS.length]!;
+  if (mood === "photo") {
+    const m = photoMood(photoColors, tone, dark, seed);
+    return { mood, paper: m.paper, colors: m.colors.map((c) => inkColor(c, m.paper)) };
+  }
+  if (mood === "retro") {
+    const m = retroMood(tone, seed);
+    return { mood, paper: m.paper, colors: m.colors.map((c) => inkColor(c, m.paper)) };
+  }
   const harmony = HARMONIES[Math.floor((seed - 1) / MOODS.length + seed) % HARMONIES.length]!;
   const hue0 = (baseHue + (seed - 1) * 23 + 360) % 360;
-  const spec: [number, number] = ({ morandi: [0.24, 0.6], vivid: [0.78, 0.55], pastel: [0.55, 0.72], deep: [0.6, 0.38] } as const)[mood] as [number, number];
+  const spec: [number, number] = ({ morandi: [0.24, 0.6], vivid: [0.78, 0.55], pastel: [0.55, 0.72], deep: [0.6, 0.38] } as const)[mood as "morandi" | "vivid" | "pastel" | "deep"] as [number, number];
   const colors = harmony.map((off, i) => {
     const h = (hue0 + off + 360) % 360;
     let s = spec[0] * (i === 2 ? 0.85 : 1), l = spec[1] + (i - 1) * 0.04;
@@ -166,28 +212,34 @@ export function sanitizePlan(plan: SoloPlan): SoloPlan {
   };
 }
 
-export type LocalStats = { lum: number; warmth: number; green: number; blue: number; dark: number; yellow: number };
+export type LocalStats = { lum: number; warmth: number; green: number; blue: number; dark: number; yellow: number; bright?: number };
 
+/** 各主题的图案（第一个是最贴合场景、一定会出现的那个） */
 const PRESETS: Record<Theme, { bg: string; colors: string[]; motifs: MotifKind[] }> = {
-  night: { bg: "#F3EDE3", colors: ["#D98A8A", "#E0A944", "#8A93AE"], motifs: ["moon", "sparkle", "sparkle", "heart", "star"] },
-  garden: { bg: "#E6F0B0", colors: ["#EE8530", "#FFF6DC"], motifs: ["sun", "leaf", "leaf", "leaf", "flower"] },
-  sky: { bg: "#F6F1E7", colors: ["#5AA6E6", "#F2A07B"], motifs: ["cloud", "bird", "bird", "wave"] },
-  water: { bg: "#F2F2EA", colors: ["#4F9BD9", "#E9A27C"], motifs: ["wave", "wave", "bird", "sparkle"] },
-  city: { bg: "#F4EFE6", colors: ["#E07B5F", "#5E86C9", "#E2B04A"], motifs: ["sparkle", "star", "note", "heart"] },
-  cafe: { bg: "#F6EEE2", colors: ["#C9824F", "#D98A8A"], motifs: ["steam", "heart", "sparkle", "flower"] },
-  snow: { bg: "#F1F3F5", colors: ["#7EA6D8", "#D98AA0"], motifs: ["snowflake", "snowflake", "sparkle", "star"] },
-  portrait: { bg: "#F5EEE6", colors: ["#E58A8A", "#E3A94B", "#8A9BC4"], motifs: ["heart", "sparkle", "flower", "star"] },
-  other: { bg: "#F5EFE4", colors: ["#D9875E", "#7A9CC6"], motifs: ["sparkle", "heart", "flower", "star"] },
+  night: { bg: "#F3EDE3", colors: ["#D98A8A", "#E0A944", "#8A93AE"], motifs: ["moon", "starburst", "star", "sparkle", "heart"] },
+  garden: { bg: "#E6F0B0", colors: ["#EE8530", "#FFF6DC"], motifs: ["sun", "leaf", "leaf", "flower", "starburst"] },
+  sky: { bg: "#F6F1E7", colors: ["#5AA6E6", "#F2A07B"], motifs: ["cloud", "bird", "bird", "star", "sparkle"] },
+  water: { bg: "#F2F2EA", colors: ["#4F9BD9", "#E9A27C"], motifs: ["wave", "bird", "cloud", "starburst", "sparkle"] },
+  city: { bg: "#F4EFE6", colors: ["#E07B5F", "#5E86C9", "#E2B04A"], motifs: ["starburst", "cloud", "star", "note", "heart"] },
+  cafe: { bg: "#F6EEE2", colors: ["#C9824F", "#D98A8A"], motifs: ["steam", "heart", "starburst", "sparkle", "flower"] },
+  snow: { bg: "#F1F3F5", colors: ["#7EA6D8", "#D98AA0"], motifs: ["snowflake", "snowflake", "starburst", "star", "cloud"] },
+  portrait: { bg: "#F5EEE6", colors: ["#E58A8A", "#E3A94B", "#8A9BC4"], motifs: ["heart", "starburst", "star", "sparkle", "flower"] },
+  other: { bg: "#F5EFE4", colors: ["#D9875E", "#7A9CC6"], motifs: ["starburst", "star", "sparkle", "heart", "cloud"] },
 };
 
 /** 没有 AI 时：按照片统计猜主题，给出一份能用的计划 */
 export function localPlan(s: LocalStats, hasPerson: boolean, avg: RGB | null): SoloPlan {
+  // 雪景：有不少很亮的白、整体偏冷 —— 放在"夜晚"前判断（雪夜也算雪景）
+  // 白天雪景：亮白多、偏冷；雪夜 / 蓝调黄昏雪景：整体蓝、暗部多、几乎没有绿色
+  const snowy = ((s.bright ?? 0) > 0.08 && s.warmth < 0.6 && s.blue + (s.bright ?? 0) > 0.2)
+    || (s.blue > 0.28 && s.dark > 0.3 && s.green < 0.05);
   const theme: Theme =
-    s.dark > 0.45 ? "night"
-      : s.green > 0.22 ? "garden"
-        : s.blue > 0.25 ? (s.lum > 0.55 ? "sky" : "water")
-          : s.yellow > 0.25 && s.warmth > 0.55 ? "cafe"
-            : hasPerson ? "portrait" : "other";
+    snowy ? "snow"
+      : s.dark > 0.45 ? "night"
+        : s.green > 0.22 ? "garden"
+          : s.blue > 0.25 ? (s.lum > 0.55 ? "sky" : "water")
+            : s.yellow > 0.25 && s.warmth > 0.55 ? "cafe"
+              : hasPerson ? "portrait" : "other";
   const p = PRESETS[theme];
   const bg = theme === "garden" && avg ? toHex(mix(avg, [236, 245, 170], 0.75)) : p.bg;
   const anchors: Anchor[] = ["top-left", "top-right", "right", "bottom-left", "bottom-right", "left"];

@@ -53,6 +53,19 @@ function star(r: Rand): Stroke[] {
   return [{ pts }];
 }
 
+/** 多芒星：8 或 12 道细长星芒，长短交替（像星光、闪耀） */
+function starburst(r: Rand): Stroke[] {
+  const n = r() < 0.5 ? 8 : 12;
+  const o = r() * Math.PI;
+  const pts: Pt[] = [];
+  for (let i = 0; i <= n * 2; i++) {
+    const a = o + (i * Math.PI) / n;
+    const rr = i % 2 ? 0.16 + r() * 0.04 : (i / 2) % 2 ? 0.62 + r() * 0.1 : 1;
+    pts.push([Math.cos(a) * rr, Math.sin(a) * rr]);
+  }
+  return [{ pts }];
+}
+
 function heart(r: Rand): Stroke[] {
   const pts: Pt[] = [];
   for (let i = 0; i <= 48; i++) {
@@ -183,7 +196,7 @@ function note(r: Rand): Stroke[] {
 }
 
 export const MOTIFS: Record<MotifKind, (r: Rand) => Stroke[]> = {
-  moon, sparkle, star, heart, sun, leaf, flower, cloud, bird, wave, steam,
+  moon, sparkle, star, starburst, heart, sun, leaf, flower, cloud, bird, wave, steam,
   snowflake: () => snowflake(), raindrop: () => raindrop(), note,
 };
 

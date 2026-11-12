@@ -91,12 +91,21 @@ describe("配色更多样、不再发棕", () => {
     const moods = new Set([1, 2, 3, 4].map((s) => schemePalette(200, s, tone, false).mood));
     expect(moods.size).toBe(4);
   });
-  it("每套至少 3 种颜色，纸张都是浅色", () => {
-    for (const s of [1, 2, 3, 4, 5]) {
-      const p = schemePalette(30, s, tone, false);
+  it("每套 3 种颜色；复古情绪是深色纸，其余是浅色纸", () => {
+    for (const s of [1, 2, 3, 4, 5, 6]) {
+      const p = schemePalette(30, s, tone, false, ["#6f9a4f", "#d2603a", "#e0a93a"]);
       expect(p.colors.length).toBe(3);
-      expect(lum(toRgb(p.paper)!)).toBeGreaterThan(0.7);
+      if (p.mood === "retro") expect(lum(toRgb(p.paper)!)).toBeLessThan(0.35);
+      else expect(lum(toRgb(p.paper)!)).toBeGreaterThan(0.65);
     }
+  });
+  it("复古深色纸和照片主色有对比（绿照片不配丝绒绿纸）", () => {
+    const p = [1, 2, 3, 4, 5, 6].map((s) => schemePalette(100, s, { hue: 110, sat: 0.3, lum: 0.5 }, false)).find((x) => x.mood === "retro")!;
+    expect(p.paper).not.toBe("#446242");
+  });
+  it("取自照片：纸张色相来自照片里的颜色", () => {
+    const p = [1, 2, 3, 4, 5, 6].map((s) => schemePalette(100, s, tone, false, ["#d2603a"])).find((x) => x.mood === "photo")!;
+    expect(Math.abs(rgbToHsl(toRgb(p.paper)!)[0] - rgbToHsl(toRgb("#d2603a")!)[0])).toBeLessThan(6);
   });
 });
 

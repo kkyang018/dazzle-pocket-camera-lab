@@ -1,6 +1,7 @@
 // 手绘单张的版式与绘制。所有位置都按照片矩形和画布宽度换算，
 // 所以同一份计划在预览（1080）和导出（4000）上画出来完全一致。
 import { FRAMES } from "@/lib/render";
+import { analyzeScene } from "@/lib/scene";
 import { grain, noShadow, rng, softShadow, type Ctx, type Img } from "@/lib/templates/draw";
 import { crayon, spline, type LineStyle, type Pt } from "./crayon";
 import { MOTIFS, accentStrokes, type Stroke } from "./motifs";
@@ -254,7 +255,7 @@ export function drawSoloCard(ctx: Ctx, W: number, H: number, img: Img, data: Sol
   // AI（或本地规则）选的线条色里，第一种有颜色、又不是暖橙的色相，用来区分暖色照片
   // 配色：AI 给的第一种颜色定基调色相（没有就用照片主色），再按"换一组"轮换情绪和色相搭配
   const aiHsl = plan?.colors.map((c) => rgbToHsl(toRgb(c) ?? [128, 128, 128])).find(([, s]) => s > 0.2);
-  const scheme = schemePalette(aiHsl?.[0] ?? tone.hue, seed, tone, look.dark);
+  const scheme = schemePalette(aiHsl?.[0] ?? tone.hue, seed, tone, look.dark, analyzeScene(photo).palette);
   const paper = plan ? scheme.paper : tintedPaper(tone, look.dark, null);
   ctx.fillStyle = paper;
   ctx.fillRect(0, 0, W, H);
@@ -285,9 +286,10 @@ export function drawSoloCard(ctx: Ctx, W: number, H: number, img: Img, data: Sol
   const rand = rng(seed * 7919 + 17);
   const flip = seed % 2 === 0; // "换一组"时左右镜像，再加上随机抖动
 
-  // 挑图案：按种子打乱候选，留 3–5 个
-  const pool = plan.motifs.slice();
-  for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [pool[i], pool[j]] = [pool[j]!, pool[i]!]; }
+  // 挑图案：第一个（最贴合场景的，比如雪景的雪花）一定保留，其余按种子打乱，一共 4–6 个
+  const [lead, ...rest] = plan.motifs;
+  for (let i = rest.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [rest[i], rest[j]] = [rest[j]!, rest[i]!]; }
+  const pool = lead ? [lead, ...rest] : rest;
   const motifs = pool.slice(0, Math.min(pool.length, 4 + Math.floor(rand() * 3)));
   const band = bandOf(rect);
   const placed = motifs.map((m, i) => {
