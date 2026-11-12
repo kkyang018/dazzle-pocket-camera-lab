@@ -1,10 +1,10 @@
 // 手绘单张的版式与绘制。所有位置都按照片矩形和画布宽度换算，
 // 所以同一份计划在预览（1080）和导出（4000）上画出来完全一致。
 import { grain, rng, type Ctx, type Img } from "@/lib/templates/draw";
-import { crayon, smooth, type LineStyle, type Pt } from "./crayon";
+import { crayon, spline, type LineStyle, type Pt } from "./crayon";
 import { MOTIFS, accentStrokes, type Stroke } from "./motifs";
 import { paperColor, toHex } from "./plan";
-import type { Anchor, MotifSize, SoloData } from "./types";
+import type { Anchor, MotifSize, Outline, SoloData } from "./types";
 
 export type PhotoRect = { px: number; py: number; pw: number; ph: number };
 
@@ -60,22 +60,65 @@ const MIRROR: Record<Anchor, Anchor> = {
   "bottom-right": "bottom-left", bottom: "bottom", "bottom-left": "bottom-right", left: "right",
 };
 
-/** 一条从纸上出发、越过照片边缘的长线 */
+/**
+ * 一条从纸上出发、越过照片边缘的长线：松弛的 S 形，偶尔打一个小圈，
+ * 末端落在照片边缘里一点点（参考图里线和照片"交织"的感觉）。
+ */
 function flowLine(r: PhotoRect, k: number, rand: () => number, W: number): Pt[] {
   const { px, py, pw, ph } = r;
   const corner = k % 4; // 0 左上 1 右上 2 右下 3 左下
   const sx = corner === 0 || corner === 3 ? -1 : 1, sy = corner < 2 ? -1 : 1;
   const cx = sx < 0 ? px : px + pw, cy = sy < 0 ? py : py + ph;
-  const far = W * (0.14 + rand() * 0.08);
-  // 一半从侧面进，一半从上下进
-  const side = rand() < 0.5;
-  const start: Pt = side ? [cx + sx * far, cy - sy * ph * (0.25 + rand() * 0.3)] : [cx - sx * pw * (0.2 + rand() * 0.3), cy + sy * far * 0.9];
-  const bend: Pt = [cx + sx * W * (0.03 + rand() * 0.05), cy + sy * W * (0.03 + rand() * 0.05)];
-  const inside: Pt = side
-    ? [cx - sx * pw * (0.04 + rand() * 0.08), cy + sy * W * (0.06 + rand() * 0.06)]
-    : [cx - sx * W * (0.02 + rand() * 0.05), cy - sy * ph * (0.06 + rand() * 0.1)];
-  const wobble: Pt = [(start[0] + bend[0]) / 2 + (rand() - 0.5) * W * 0.08, (start[1] + bend[1]) / 2 + (rand() - 0.5) * W * 0.08];
-  return smooth([start, wobble, bend, inside], 4);
+  // 起点：在角的外侧，方向随机偏向水平或竖直
+  const horizontal = rand() < 0.5;
+  const ang = Math.atan2(sy * (horizontal ? 0.35 : 1), sx * (horizontal ? 1 : 0.35)) + (rand() - 0.5) * 0.5;
+  const far = W * (0.24 + rand() * 0.14);
+  const start: Pt = [cx + Math.cos(ang) * far, cy + Math.sin(ang) * far];
+  // 终点：越过照片边缘一点
+  const end: Pt = horizontal
+    ? [cx - sx * W * (0.02 + rand() * 0.03), cy - sy * ph * (0.12 + rand() * 0.22)]
+    : [cx - sx * pw * (0.12 + rand() * 0.22), cy - sy * W * (0.02 + rand() * 0.03)];
+  const dx = end[0] - start[0], dy = end[1] - start[1], L = Math.hypot(dx, dy) || 1;
+  const nx = -dy / L, ny = dx / L;
+  const ctrl: Pt[] = [start];
+  // 一个大弯 + 一个反向小弯，像随手一甩的弧线
+  const flip = rand() < 0.5 ? 1 : -1;
+  const bows = [[0.3, 0.05 + rand() * 0.04], [0.68, -(0.02 + rand() * 0.025)]] as const;
+  for (const [t, a] of bows) {
+    const amp = W * a * flip;
+    ctrl.push([start[0] + dx * t + nx * amp, start[1] + dy * t + ny * amp]);
+  }
+  // 偶尔打一个圆润的小圈（在第一个弯和第二个弯之间）
+  if (rand() < 0.3) {
+    const [ax, ay] = ctrl[1]!, [bx, by] = ctrl[2]!;
+    const mx = (ax + bx) / 2, my = (ay + by) / 2, rad = W * (0.026 + rand() * 0.012), side = flip;
+    const ox = mx + nx * rad * side, oy = my + ny * rad * side;
+    const base = Math.atan2(-ny * side, -nx * side);
+    const loop: Pt[] = [];
+    for (let j = 0; j <= 9; j++) {
+      const a = base - (side * j * Math.PI * 2) / 9;
+      loop.push([ox + Math.cos(a) * rad, oy + Math.sin(a) * rad]);
+    }
+    ctrl.splice(2, 0, ...loop);
+  }
+  ctrl.push(end);
+  return spline(ctrl, 16);
+}
+
+/** 照片里的点缀挪到人物轮廓外侧（像参考图里招手旁的小线），不压在身上 */
+function snapToOutline(a: { x: number; y: number }, outline: Outline, aspect: number) {
+  let best: Pt | null = null, bd = Infinity;
+  for (const path of outline.paths) for (const p of path) {
+    const d = Math.hypot((p[0] - a.x) * aspect, p[1] - a.y);
+    if (d < bd) { bd = d; best = p; }
+  }
+  if (!best || bd > 0.35) return null;
+  const [bx, by, bw, bh] = outline.box;
+  const ccx = bx + bw / 2, ccy = by + bh * 0.45;
+  let dx = (best[0] - ccx) * aspect, dy = best[1] - ccy;
+  const l = Math.hypot(dx, dy) || 1;
+  dx /= l; dy /= l;
+  return { x: best[0] + (dx * 0.07) / aspect, y: best[1] + dy * 0.07, angle: (Math.atan2(dy, dx) * 180) / Math.PI };
 }
 
 function strokeAll(ctx: Ctx, strokes: Stroke[], colors: string[], ci: number, cx: number, cy: number, size: number, deg: number, flip: boolean, lw: number, seed: number, style?: LineStyle) {
@@ -144,17 +187,28 @@ export function drawSoloCard(ctx: Ctx, W: number, H: number, img: Img, data: Sol
 
   placed.forEach((p, k) => p.m.size !== "l" && drawMotif(p, k));
 
-  // 主体描边：贴着人物、在照片边缘断开
+  // 主体描边：贴着人物、在照片边缘断开；再补一遍偏移的淡线，像手描了两次
   const outline = data?.outline;
   if (outline) {
     outline.paths.forEach((path, i) => {
       const pts = path.map(([x, y]) => [px + x * pw, py + y * ph] as Pt);
-      crayon(ctx, pts, colors[0]!, lw * (i ? 0.85 : 1), seed * 401 + i, "solid");
+      crayon(ctx, pts, colors[0]!, lw * (i ? 0.85 : 1), seed * 401 + i, "solid", { wobble: 0.7 });
+      // 第二遍：只描中间一段，略微错开、更细更淡
+      const a = Math.floor(pts.length * (0.15 + rand() * 0.15)), b = Math.floor(pts.length * (0.55 + rand() * 0.3));
+      const second = pts.slice(a, b).map(([x, y]) => [x + lw * 0.9, y - lw * 0.6] as Pt);
+      ctx.save();
+      ctx.globalAlpha = 0.45;
+      crayon(ctx, second, colors[0]!, lw * 0.55, seed * 409 + i, "solid", { wobble: 1.2 });
+      ctx.restore();
     });
   }
 
-  // 照片里的点缀：AI 给位置；没有时在人物肩旁放几道小线
-  let accents = plan.accents;
+  // 照片里的点缀：AI 给位置；有人物描边时挪到轮廓外侧，不压在身上；没有时在肩旁放几道小线
+  let accents = plan.accents.map((a) => {
+    if (!outline || a.kind === "speed") return a;
+    const s = snapToOutline(a, outline, pw / ph);
+    return s ? { ...a, ...s } : a;
+  });
   if (!accents.length && outline) {
     const [bx, by, bw, bh] = outline.box;
     accents = [{ kind: "ticks", x: Math.min(0.95, bx + bw * 0.92), y: by + bh * 0.12, angle: -35 }];
