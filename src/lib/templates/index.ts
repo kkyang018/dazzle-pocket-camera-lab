@@ -1,8 +1,10 @@
 import type { CameraCategory } from "@/lib/cameras";
-import type { PuzzleAI, SoloStroke, StickerFamily } from "./ai-types";
+import type { PuzzleAI, StickerFamily } from "./ai-types";
 import { FONTS, cover, grain, rng, type Ctx, type Img } from "./draw";
+import { drawSoloCard } from "@/lib/solo/draw";
+import type { SoloData } from "@/lib/solo/types";
 
-export type { PuzzleAI, SoloStroke, StickerFamily } from "./ai-types";
+export type { PuzzleAI, StickerFamily } from "./ai-types";
 export type TemplateId = "solo" | "halfframe" | "polaroid" | "puzzle";
 export type PolaroidFormat = "mini" | "square" | "wide";
 
@@ -26,10 +28,8 @@ export type TemplateOptions = {
   seed: number;
   /** 拼图：每张照片裁切中心（可拖动）；null = 用 AI 主体位置 */
   pcrops: ([number, number] | null)[];
-  /** 手绘单张：AI 看图配的线；null = 本地备用画法，"pending" = 等待中只画照片 */
-  soloLines: SoloStroke[] | null | "pending";
-  /** 手绘单张：AI 生图画好的透明手绘线层（与画布同比例），优先于 soloLines */
-  soloDoodle: Img | null;
+  /** 手绘单张：AI/本地计划 + 人物描边；null = 还在准备，只画照片 */
+  solo: SoloData | null;
   /** 拼图：AI 选的贴纸族/配色/主体位置 */
   puzzleAI: PuzzleAI | null;
 };
@@ -69,8 +69,6 @@ export function avgColor(img: Img): RGB {
   const n = d.length / 4;
   return [r / n, gg / n, b / n];
 }
-const hex = ([r, g, b]: RGB) => "#" + [r, g, b].map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, "0")).join("");
-const mix = (a: RGB, b: RGB, t: number): RGB => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 
 /** 背景主色 → 有对比但温润的蜡笔色 */
 export function contrastCrayon([r, g, b]: RGB): string {
@@ -111,83 +109,10 @@ function crayonStroke(ctx: Ctx, pts: [number, number][], color: string, w: numbe
   }
   ctx.restore();
 }
-const arc = (cx: number, cy: number, rx: number, ry: number, a0: number, a1: number, n = 18): [number, number][] =>
-  Array.from({ length: n + 1 }, (_, i) => { const a = a0 + ((a1 - a0) * i) / n; return [cx + Math.cos(a) * rx, cy + Math.sin(a) * ry]; });
 
-// ── ① 手绘单张：原比例小照片 + 看图配色的手绘细线 ─────────────────
-/** 手绘单张版式：底色 + 照片位置（保持原比例），AI 底稿和最终画布共用 */
-export function soloLayout(W: number, H: number, img: Img) {
-  const base = avgColor(img);
-  const ar = img.width / img.height;
-  let pw = W * (ar >= 1 ? 0.56 : 0.46), ph = pw / ar;
-  if (ph > H * 0.5) { ph = H * 0.5; pw = ph * ar; }
-  return { base, bg: hex(mix(base, [250, 247, 236], 0.86)), px: (W - pw) / 2, py: (H - ph) / 2, pw, ph };
-}
-
+// ── ① 手绘单张：原比例照片 + 蜡笔手绘（版式和图案见 src/lib/solo） ──────────
 function drawSolo(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOptions) {
-  const u = W / 1080, img = imgs[0]!;
-  const { base, bg, px, py, pw, ph } = soloLayout(W, H, img);
-  const lum = (base[0] * 0.3 + base[1] * 0.59 + base[2] * 0.11) / 255;
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, W, H);
-  // 照片保持原比例，原图像素直接绘制
-  ctx.drawImage(img, px, py, pw, ph);
-  if (o.soloDoodle) {
-    ctx.drawImage(o.soloDoodle, 0, 0, W, H);
-    return grain(ctx, W, H, 0.05);
-  }
-  if (o.soloLines === "pending") return grain(ctx, W, H, 0.06);
-  if (o.soloLines) {
-    o.soloLines.forEach((st, i) => {
-      const pts = st.pts.map(([x, y]) => [px + x * pw, py + y * ph] as [number, number]);
-      crayonStroke(ctx, pts, st.color, (3 + st.width * 1.8) * u, o.seed * 97 + i, st.style);
-    });
-    return grain(ctx, W, H, 0.06);
-  }
-  // 三色：取照片色加深/提亮，线条有实线、虚线、点线
-  const night = lum < 0.35, cool = base[2] > base[0];
-  const c1 = hex(mix(base, night ? [240, 200, 120] : [214, 120, 70], 0.7));
-  const c2 = hex(mix(base, cool ? [80, 120, 170] : [120, 150, 90], 0.65));
-  const c3 = hex(mix(base, [200, 110, 130], 0.6));
-  const w = 5 * u, R = rng(o.seed + 11);
-  const L = px, T = py, Rt = px + pw, B = py + ph;
-  // 沿照片边的穿插弧线
-  crayonStroke(ctx, arc(L + pw * 0.12, T, pw * 0.28, ph * 0.22, Math.PI * 0.9, Math.PI * 1.9), c1, w, o.seed + 1);
-  crayonStroke(ctx, arc(Rt, B - ph * 0.2, pw * 0.16, ph * 0.3, -Math.PI * 0.4, Math.PI * 0.6), c2, w * 0.8, o.seed + 2, "dash");
-  crayonStroke(ctx, [[L - 40 * u, B - 30 * u], [L + pw * 0.2, B + 50 * u], [L + pw * 0.5, B + 30 * u], [L + pw * 0.75, B + 70 * u]], c3, w * 0.7, o.seed + 3, "dot");
-  // 主题符号
-  const sx = Rt - pw * 0.06, sy = T - 10 * u;
-  if (night) {
-    crayonStroke(ctx, arc(sx, sy, 46 * u, 46 * u, Math.PI * 0.6, Math.PI * 2.2), c1, w, o.seed + 4);
-    crayonStroke(ctx, arc(sx + 18 * u, sy - 10 * u, 38 * u, 38 * u, Math.PI * 0.7, Math.PI * 2.1), c1, w * 0.6, o.seed + 5);
-    for (let i = 0; i < 4; i++) {
-      const x = L - 20 * u + R() * pw * 0.4, y = B + 80 * u + R() * 60 * u, s = (10 + R() * 12) * u;
-      crayonStroke(ctx, [[x - s, y], [x + s, y]], c3, w * 0.7, o.seed + 20 + i);
-      crayonStroke(ctx, [[x, y - s], [x, y + s]], c3, w * 0.7, o.seed + 30 + i);
-    }
-  } else if (cool) {
-    // 云 + 飞鸟
-    const cy = T - 40 * u, cx = L + pw * 0.62;
-    crayonStroke(ctx, [...arc(cx, cy, 34 * u, 28 * u, Math.PI, Math.PI * 2), ...arc(cx + 56 * u, cy - 6 * u, 30 * u, 34 * u, Math.PI, Math.PI * 2), ...arc(cx + 100 * u, cy + 6 * u, 24 * u, 22 * u, Math.PI * 1.1, Math.PI * 2.4)], c2, w, o.seed + 6);
-    for (let i = 0; i < 3; i++) {
-      const x = L + 30 * u + i * 60 * u, y = T - 90 * u + i * 18 * u, s = 18 * u;
-      crayonStroke(ctx, [[x - s, y], [x - s * 0.3, y + s * 0.5], [x, y], [x + s * 0.4, y + s * 0.5], [x + s, y]], c3, w * 0.7, o.seed + 40 + i);
-    }
-  } else {
-    // 太阳 + 叶子
-    crayonStroke(ctx, arc(sx, sy, 34 * u, 34 * u, 0, Math.PI * 2), c1, w, o.seed + 7);
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2;
-      crayonStroke(ctx, [[sx + Math.cos(a) * 50 * u, sy + Math.sin(a) * 50 * u], [sx + Math.cos(a) * 72 * u, sy + Math.sin(a) * 72 * u]], c1, w * 0.7, o.seed + 50 + i);
-    }
-    const lx = L - 10 * u, ly = B - ph * 0.35;
-    crayonStroke(ctx, [[lx + 30 * u, ly - 60 * u], [lx - 20 * u, ly], [lx - 40 * u, ly + 90 * u]], c2, w * 0.8, o.seed + 8);
-    for (let i = 0; i < 3; i++) {
-      const y = ly - 30 * u + i * 45 * u, x = lx - 12 * u - i * 8 * u;
-      crayonStroke(ctx, arc(x - 26 * u, y, 24 * u, 11 * u, 0, Math.PI * 2, 14), c2, w * 0.6, o.seed + 60 + i);
-    }
-  }
-  grain(ctx, W, H, 0.08);
+  drawSoloCard(ctx, W, H, imgs[0]!, o.solo, o.seed);
 }
 
 // ── ② 半格胶片：两张竖裁并排、满版、黑分隔条、轻颗粒偏暖 ───────────
@@ -492,5 +417,5 @@ export function recommendTemplate(count: number, category: CameraCategory | null
 export function defaultOptions(place: string | null = null): TemplateOptions {
   const d = new Date();
   const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  return { caption: place ?? "", date, frame: 0, format: "mini", crops: [0.5, 0.5], swap: false, sticker: null, stickerColor: null, seed: 1, pcrops: [null, null, null, null], soloLines: null, soloDoodle: null, puzzleAI: null };
+  return { caption: place ?? "", date, frame: 0, format: "mini", crops: [0.5, 0.5], swap: false, sticker: null, stickerColor: null, seed: 1, pcrops: [null, null, null, null], solo: null, puzzleAI: null };
 }

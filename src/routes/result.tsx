@@ -1,14 +1,18 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { puzzleStyle } from "@/lib/ai/vision.functions";
-import { soloDoodle } from "@/lib/ai/doodle.functions";
+import { puzzleStyle, soloPlan } from "@/lib/ai/vision.functions";
+import { analyzeScene } from "@/lib/scene";
+import { averageColor } from "@/lib/solo/draw";
+import { localPlan } from "@/lib/solo/plan";
+import { personOutline } from "@/lib/solo/segment";
+import type { SoloData } from "@/lib/solo/types";
 import { ChevronLeft, Loader2, Shuffle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AiMark, ApproxTag, ProMark } from "@/components/app/marks";
 import { useApp } from "@/lib/app-state";
 import { loadFonts } from "@/lib/templates/draw";
 import {
-  TEMPLATES, blockReason, defaultOptions, soloLayout, getTemplate, puzzleCrop, puzzleRects, puzzleSticker, recommendTemplate, takeCount, usable,
+  TEMPLATES, blockReason, defaultOptions, getTemplate, puzzleCrop, puzzleRects, puzzleSticker, recommendTemplate, takeCount, usable,
   type PolaroidFormat, type PuzzleAI, type StickerFamily, type TemplateId, type TemplateOptions,
 } from "@/lib/templates";
 import { developed, exportSource, saveCanvas } from "@/lib/templates/sources";
@@ -66,9 +70,11 @@ function ResultPage() {
   const [saving, setSaving] = useState(false);
   const canvas = useRef<HTMLCanvasElement>(null);
   const drag = useRef<{ x: number; y: number; side: number; start: [number, number]; rw: number; rh: number } | null>(null);
-  const [soloAI, setSoloAI] = useState<Record<string, HTMLCanvasElement | "pending" | "err">>({});
+  // 手绘单张：每组照片一份（人物描边 + 计划）；先出本地版，AI 回来后替换
+  const [solo, setSolo] = useState<Record<string, SoloData>>({});
+  const [soloBusy, setSoloBusy] = useState<Record<string, boolean>>({});
   const [puzAI, setPuzAI] = useState<Record<string, PuzzleAI | "pending" | "err">>({});
-  const callSolo = useServerFn(soloDoodle);
+  const callSolo = useServerFn(soloPlan);
   const callPuzzle = useServerFn(puzzleStyle);
   const t = getTemplate(tid);
   const ok = usable(t, cats);
@@ -82,21 +88,32 @@ function ResultPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ids]);
 
-  // AI 看图：手绘单张配线、拼图选贴纸/配色/主体位置；结果按照片组缓存
-  const soloKey = `${ids}:${opts.seed}`;
+  // 手绘单张：本机找人物轮廓 → 先用本地规则出一版 → AI 看图给主题/配色/图案后替换。
+  // 结果按照片组缓存；"换一组"只重新排版，不再调 AI。
   useEffect(() => {
-    if (!imgs?.[0] || tid !== "solo" || soloAI[soloKey]) return;
-    setSoloAI((m) => ({ ...m, [soloKey]: "pending" }));
-    const { base, layer } = soloBase(imgs[0]!);
-    callSolo({ data: { image: base.toDataURL("image/png"), variant: opts.seed } })
-      .then(async (r) => {
-        if (!r.ok) { setSoloAI((m) => ({ ...m, [soloKey]: "err" })); return showHint(r.error); }
-        const lines = await extractLines(base, layer, r.image);
-        setSoloAI((m) => ({ ...m, [soloKey]: lines }));
-      })
-      .catch(() => { setSoloAI((m) => ({ ...m, [soloKey]: "err" })); showHint("AI 配线失败，先用本地效果"); });
+    const img = imgs?.[0];
+    if (!img || tid !== "solo" || solo[ids] || soloBusy[ids]) return;
+    let alive = true;
+    setSoloBusy((m) => ({ ...m, [ids]: true }));
+    void (async () => {
+      const outline = await personOutline(img);
+      const plan = localPlan(analyzeScene(img).stats, !!outline, averageColor(img));
+      if (!alive) return;
+      setSolo((m) => ({ ...m, [ids]: { plan, outline } }));
+      try {
+        const r = await callSolo({ data: { image: thumb(img), person: outline?.box ?? null } });
+        if (!alive) return;
+        if (r.ok) setSolo((m) => ({ ...m, [ids]: { plan: r.data, outline } }));
+        else showHint(r.error);
+      } catch {
+        if (alive) showHint("AI 看图失败，先用本地效果");
+      } finally {
+        if (alive) setSoloBusy((m) => ({ ...m, [ids]: false }));
+      }
+    })();
+    return () => { alive = false; setSoloBusy((m) => ({ ...m, [ids]: false })); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [imgs, tid, soloKey]);
+  }, [imgs, tid, ids]);
   useEffect(() => {
     if (!imgs || tid !== "puzzle" || puzAI[ids] || imgs.length < 3) return;
     setPuzAI((m) => ({ ...m, [ids]: "pending" }));
@@ -106,12 +123,11 @@ function ResultPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [imgs, tid, ids]);
   useEffect(() => { setOpts((o) => ({ ...o, pcrops: [null, null, null, null] })); }, [ids]);
-  const sState = soloAI[soloKey], pState = puzAI[ids];
-  const aiBusy = (tid === "solo" && sState === "pending") || (tid === "puzzle" && pState === "pending");
+  const sState = solo[ids], pState = puzAI[ids];
+  const aiBusy = (tid === "solo" && !!soloBusy[ids]) || (tid === "puzzle" && pState === "pending");
   const full = useMemo<TemplateOptions>(() => ({
     ...opts,
-    soloLines: sState === "pending" ? "pending" : null,
-    soloDoodle: sState && typeof sState === "object" ? sState : null,
+    solo: sState ?? null,
     puzzleAI: pState && typeof pState === "object" ? pState : null,
   }), [opts, sState, pState]);
 
@@ -233,7 +249,7 @@ function ResultPage() {
                 {!imgs && <Loader2 className="absolute inset-0 m-auto size-6 animate-spin text-muted-foreground" />}
                 {imgs && aiBusy && (
                   <span className="absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full bg-background/80 px-2.5 py-1 font-mono text-[10px] backdrop-blur-sm">
-                    <AiMark className="size-3" />{t.id === "solo" ? "AI 看图配线中" : "AI 看图配贴纸中"}<Loader2 className="size-3 animate-spin" />
+                    <AiMark className="size-3" />{t.id === "solo" ? "AI 看图选图案中" : "AI 看图配贴纸中"}<Loader2 className="size-3 animate-spin" />
                   </span>
                 )}
               </div>
@@ -255,8 +271,11 @@ function ResultPage() {
             {t.id === "solo" && (
               <Field label="手绘线条">
                 <div className="flex items-center gap-2">
-                  <span className="flex items-center gap-1 text-[12px] text-muted-foreground"><AiMark className="size-3.5" />AI 看照片内容配线</span>
-                  <button type="button" onClick={() => set("seed", opts.seed + 1)} disabled={aiBusy} className={cn(chip(false), "ml-auto flex items-center gap-1 disabled:opacity-50")}><Shuffle className="size-3" />换一组</button>
+                  <span className="flex items-center gap-1 text-[12px] text-muted-foreground">
+                    <AiMark className="size-3.5" />
+                    {sState?.plan.source === "ai" ? "AI 看图选的图案和配色" : aiBusy ? "AI 正在看图…" : "本地配色（AI 未连上）"}
+                  </span>
+                  <button type="button" onClick={() => set("seed", opts.seed + 1)} disabled={!sState} className={cn(chip(false), "ml-auto flex items-center gap-1 disabled:opacity-50")}><Shuffle className="size-3" />换一组</button>
                 </div>
               </Field>
             )}
@@ -323,37 +342,4 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       {children}
     </div>
   );
-}
-
-/** AI 底稿：和成品同版式的 768×1024 画布（底色 + 原比例照片） */
-function soloBase(img: HTMLCanvasElement) {
-  const W = 768, H = 1024;
-  const base = document.createElement("canvas");
-  base.width = W; base.height = H;
-  const ctx = base.getContext("2d")!;
-  const l = soloLayout(W, H, img);
-  ctx.fillStyle = l.bg; ctx.fillRect(0, 0, W, H);
-  ctx.drawImage(img, l.px, l.py, l.pw, l.ph);
-  return { base, layer: l };
-}
-
-/** 对比 AI 结果和底稿，只留下 AI 新画的线条（透明层），原照片像素不用 AI 的 */
-async function extractLines(base: HTMLCanvasElement, _l: unknown, url: string): Promise<HTMLCanvasElement> {
-  const im = new Image();
-  im.src = url;
-  await im.decode();
-  const W = base.width, H = base.height;
-  const out = document.createElement("canvas");
-  out.width = W; out.height = H;
-  const octx = out.getContext("2d", { willReadFrequently: true })!;
-  octx.drawImage(im, 0, 0, W, H);
-  const a = octx.getImageData(0, 0, W, H);
-  const b = base.getContext("2d")!.getImageData(0, 0, W, H).data;
-  const d = a.data;
-  for (let i = 0; i < d.length; i += 4) {
-    const diff = Math.max(Math.abs(d[i]! - b[i]!), Math.abs(d[i + 1]! - b[i + 1]!), Math.abs(d[i + 2]! - b[i + 2]!));
-    d[i + 3] = Math.round(255 * Math.min(1, Math.max(0, (diff - 45) / 50)));
-  }
-  octx.putImageData(a, 0, 0);
-  return out;
 }
