@@ -4,7 +4,7 @@ import { FRAMES } from "@/lib/render";
 import { grain, noShadow, rng, softShadow, type Ctx, type Img } from "@/lib/templates/draw";
 import { crayon, spline, type LineStyle, type Pt } from "./crayon";
 import { MOTIFS, accentStrokes, type Stroke } from "./motifs";
-import { inkColor, lum, paperColor, toHex, toRgb } from "./plan";
+import { inkColor, lum, rgbToHsl, standOut, tintedPaper, toHex, toRgb, type Tone } from "./plan";
 import type { Anchor, MotifSize, Outline, SoloData } from "./types";
 
 export type PhotoRect = { px: number; py: number; pw: number; ph: number };
@@ -40,11 +40,37 @@ export function cropInner(img: Img, kind: FrameKind | null): Img {
   return c;
 }
 
-/** 深色纸：保留 AI 选的底色色相，压到很暗 */
-export function darkPaper(hex: string): string {
-  const c = toRgb(hex) ?? [245, 239, 228];
-  const ink: [number, number, number] = [26, 24, 22];
-  return toHex([c[0] * 0.12 + ink[0] * 0.88, c[1] * 0.12 + ink[1] * 0.88, c[2] * 0.12 + ink[2] * 0.88]);
+/** 照片色调：饱和度加权的主色相 + 平均饱和度 + 平均明度 */
+export function photoTone(img: Img, skipSkin = false): Tone {
+  const c = document.createElement("canvas");
+  c.width = c.height = 32;
+  const g = c.getContext("2d", { willReadFrequently: true })!;
+  g.drawImage(img, 0, 0, 32, 32);
+  const d = g.getImageData(0, 0, 32, 32).data;
+  const bins = new Float32Array(36);
+  let sat = 0, l = 0;
+  const n = d.length / 4;
+  for (let i = 0; i < d.length; i += 4) {
+    const rgb: [number, number, number] = [d[i]!, d[i + 1]!, d[i + 2]!];
+    const [h, s, ll] = rgbToHsl(rgb);
+    // 按面积算主色：有颜色的像素各算一票（太暗太亮的颜色不可靠，不算）；
+    // 有人物时跳过肤色/发色那段色相，让纸张跟着场景走
+    const skin = skipSkin && h >= 5 && h < 40;
+    if (s > 0.12 && ll > 0.12 && ll < 0.88 && !skin) bins[Math.floor(h / 10) % 36]! += 1;
+    sat += s * (1 - Math.abs(ll - 0.5) * 2 > 0 ? 1 - Math.abs(ll - 0.5) * 2 : 0);
+    l += lum(rgb);
+  }
+  // 相邻色相合并（±20°）再取峰值，峰值处用加权平均得到更准的色相
+  let peak = 0, best = -1;
+  for (let k = 0; k < 36; k++) {
+    let v = 0;
+    for (let j = -2; j <= 2; j++) v += bins[(k + j + 36) % 36]! * (j === 0 ? 1 : Math.abs(j) === 1 ? 0.8 : 0.5);
+    if (v > best) { best = v; peak = k; }
+  }
+  let hs = 0, ws = 0;
+  for (let j = -2; j <= 2; j++) { const w = bins[(peak + j + 36) % 36]!; hs += (peak + j) * 10 * w; ws += w; }
+  const hue = ws ? ((hs / ws + 5) % 360 + 360) % 360 : peak * 10 + 5;
+  return { hue, sat: sat / n, lum: l / n };
 }
 
 /** 照片平均色 → 默认纸色（AI 还没回来时用） */
@@ -146,6 +172,39 @@ function flowLine(r: PhotoRect, k: number, rand: () => number, band: Band): Pt[]
   return spline(ctrl, 16).map((p) => clampTo(band, p));
 }
 
+/**
+ * 角上的环绕线（参考手绘草图）：一条 L 形线贴着照片的一个角走，
+ * 旁边再配一段小波浪，像随手给照片框了一下。
+ */
+function cornerWrap(r: PhotoRect, corner: number, rand: () => number, band: Band): { arm: Pt[]; squiggle: Pt[] } {
+  const { px, py, pw, ph } = r;
+  const sx = corner === 0 || corner === 3 ? -1 : 1, sy = corner < 2 ? -1 : 1;
+  const cx = sx < 0 ? px : px + pw, cy = sy < 0 ? py : py + ph;
+  const d = band.s * (0.22 + rand() * 0.14);
+  const C: Pt = [cx + sx * d, cy + sy * d];
+  const hx = cx - sx * pw * (0.35 + rand() * 0.3); // 横向那一笔的起点
+  const vy = cy - sy * ph * (0.3 + rand() * 0.3); // 竖向那一笔的终点
+  // 拐角略圆，不是死角
+  const k = d * 0.6;
+  const arm: Pt[] = spline([[hx, C[1] + (rand() - 0.5) * d * 0.3], [C[0] - sx * k, C[1]], [C[0], C[1] - sy * k], [C[0] + (rand() - 0.5) * d * 0.3, vy]], 14);
+  // 小波浪：贴着横向或竖向那一笔、再往外一点
+  const alongX = rand() < 0.5;
+  const off = d + band.s * (0.28 + rand() * 0.12);
+  // 松一点的圆弧波浪（像手写的 "m"），不是锯齿
+  const len = band.s * (1.5 + rand() * 0.7), amp = band.s * (0.13 + rand() * 0.05), wl = band.s * (0.4 + rand() * 0.12);
+  const squiggle: Pt[] = [];
+  for (let i = 0; i <= 90; i++) {
+    const t = i / 90, s = t * len;
+    // 叠一点二次谐波，让波峰圆、波谷尖一点，更像手写
+    const ph = (s / wl) * Math.PI * 2;
+    const wv = (Math.sin(ph) * 0.85 + Math.sin(ph * 2 + 0.6) * 0.15) * amp * (0.55 + 0.45 * Math.sin(t * Math.PI));
+    squiggle.push(alongX
+      ? [cx + sx * band.s * 0.1 - sx * s, cy + sy * off + wv]
+      : [cx + sx * off + wv, cy + sy * band.s * 0.1 - sy * s]);
+  }
+  return { arm: arm.map((p) => clampTo(band, p)), squiggle: squiggle.map((p) => clampTo(band, p)) };
+}
+
 /** 照片里的点缀挪到人物轮廓外侧（像参考图里招手旁的小线），不压在身上 */
 function snapToOutline(a: { x: number; y: number }, outline: Outline, aspect: number) {
   let best: Pt | null = null, bd = Infinity;
@@ -183,9 +242,11 @@ export function drawSoloCard(ctx: Ctx, W: number, H: number, img: Img, data: Sol
   const [ix, iy, iw, ih] = innerRect(img, look.frame);
   const px = rect.px + rect.pw * ix, py = rect.py + rect.ph * iy, pw = rect.pw * iw, ph = rect.ph * ih;
   const plan = data?.plan;
-  const avg = averageColor(cropInner(img, look.frame));
-  const light = plan?.background ?? paperColor(toHex([avg[0] * 0.25 + 245 * 0.75, avg[1] * 0.25 + 239 * 0.75, avg[2] * 0.25 + 228 * 0.75]));
-  const paper = look.dark ? darkPaper(light) : light;
+  const photo = cropInner(img, look.frame);
+  const tone = photoTone(photo, !!data?.outline);
+  // 纸张颜色跟照片色调走：浅色亮、深色暗；照片越鲜艳纸越素
+  const aiHue = plan?.colors[0] ? rgbToHsl(toRgb(plan.colors[0]) ?? [200, 150, 100])[0] : 40;
+  const paper = tintedPaper(tone, look.dark, aiHue);
   ctx.fillStyle = paper;
   ctx.fillRect(0, 0, W, H);
 
@@ -207,12 +268,10 @@ export function drawSoloCard(ctx: Ctx, W: number, H: number, img: Img, data: Sol
   }
 
   const lw = 6 * u;
-  // 深色纸上把线条色调亮，保证看得清
-  const colors = (plan.colors.length ? plan.colors : ["#C9824F"]).map((c) => (look.dark ? inkColor(c, paper) : c));
-  // 照片里的点缀：照片偏暗用最亮的颜色，否则用最深的颜色
-  const lumOf = (h: string) => lum(toRgb(h) ?? [128, 128, 128]);
-  const photoDark = lum(avg) < 0.4;
-  const inPhoto = colors.reduce((a, b) => ((photoDark ? lumOf(b) > lumOf(a) : lumOf(b) < lumOf(a)) ? b : a));
+  // 纸上的线条：和纸张拉开明度，保证看得清
+  const colors = (plan.colors.length ? plan.colors : ["#C9824F"]).map((c) => inkColor(c, paper));
+  // 画在照片上的描边和点缀：挑和照片主色相差最远的颜色（绿照片不用绿线）
+  const inPhoto = standOut(plan.colors.length ? plan.colors : colors, tone);
   const rand = rng(seed * 7919 + 17);
   const flip = seed % 2 === 0; // "换一组"时左右镜像，再加上随机抖动
 
@@ -249,17 +308,25 @@ export function drawSoloCard(ctx: Ctx, W: number, H: number, img: Img, data: Sol
   // 长线分散到不同的角：先对角，再补另外两个角
   const startCorner = Math.floor(rand() * 4);
   const corners = [0, 2, 1, 3].map((d) => (startCorner + d) % 4);
+  // 角上环绕放在对角（corners[0] 和 corners[1] 是对角），长线放另外两个角
+  const wrapCorners = [corners[0]!, corners[1]!], lineCorners = [corners[2]!, corners[3]!];
   for (let k = 0; k < plan.flows; k++) {
-    const line = flowLine(rect, corners[k % 4]!, rand, band);
-    crayon(ctx, line, colors[(k + 1) % colors.length]!, lw * (k === 0 ? 1 : 0.85), seed * 211 + k, styles[(k + seed) % 3]!);
+    const color = colors[(k + 1) % colors.length]!;
+    if (k % 2 === 0) {
+      // 角上环绕：L 形线 + 小波浪
+      const { arm, squiggle } = cornerWrap(rect, wrapCorners[(k / 2) % 2]!, rand, band);
+      crayon(ctx, arm, color, lw * 0.95, seed * 211 + k, k === 0 ? "solid" : styles[(k + seed) % 3]!);
+      crayon(ctx, squiggle, colors[(k + 2) % colors.length]!, lw * 0.85, seed * 223 + k, "solid", { wobble: 0.3 });
+    } else {
+      crayon(ctx, flowLine(rect, lineCorners[((k - 1) / 2) % 2]!, rand, band), color, lw * 0.85, seed * 211 + k, styles[(k + seed) % 3]!);
+    }
   }
 
   placed.forEach((p, k) => p.m.size !== "l" && drawMotif(p, k));
 
   // 主体描边：贴着人物、在照片边缘断开；再补一遍偏移的淡线，像手描了两次
   const outline = data?.outline;
-  // 描边色和照片明度太接近会看不清，换成照片上最显眼的颜色
-  const outlineColor = Math.abs(lumOf(colors[0]!) - lum(avg)) < 0.22 ? inPhoto : colors[0]!;
+  const outlineColor = inPhoto;
   if (outline) {
     outline.paths.forEach((path, i) => {
       const pts = path.map(([x, y]) => [px + x * pw, py + y * ph] as Pt);

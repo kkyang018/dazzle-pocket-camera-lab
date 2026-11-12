@@ -15,6 +15,51 @@ export const lum = ([r, g, b]: RGB) => (0.299 * r + 0.587 * g + 0.114 * b) / 255
 
 const CREAM: RGB = [245, 239, 228];
 
+/** RGB(0–255) → HSL（h 0–360，s/l 0–1） */
+export function rgbToHsl([r, g, b]: RGB): [number, number, number] {
+  r /= 255; g /= 255; b /= 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+  if (mx === mn) return [0, 0, l];
+  const d = mx - mn, s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+  const h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [h * 60, s, l];
+}
+export function hslToRgb(h: number, s: number, l: number): RGB {
+  const k = (n: number) => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n: number) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  return [f(0) * 255, f(8) * 255, f(4) * 255];
+}
+const hueDist = (a: number, b: number) => { const d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; };
+
+/** 照片的主色调：hue = 饱和度加权的主色相，sat = 平均饱和度，lum = 平均明度 */
+export type Tone = { hue: number; sat: number; lum: number };
+
+/**
+ * 有色彩的纸：色相跟照片走；照片越鲜艳纸越素，照片越灰纸越有颜色。
+ * 浅色纸亮度高，深色纸压暗。
+ */
+export function tintedPaper(tone: Tone, dark: boolean, fallbackHue = 40): string {
+  const hue = tone.sat < 0.06 ? fallbackHue : tone.hue;
+  const s = Math.min(0.5, Math.max(0.12, 0.55 - tone.sat * 0.9));
+  return toHex(dark ? hslToRgb(hue, s * 0.8, 0.15) : hslToRgb(hue, s, 0.88));
+}
+
+/** 在照片上最显眼的颜色：和照片主色相差得远、明度拉得开 */
+export function standOut(colors: string[], tone: Tone): string {
+  let best = colors[0] ?? "#E8873A", score = -1;
+  for (const c of colors) {
+    const rgb = toRgb(c);
+    if (!rgb) continue;
+    const [h, s] = rgbToHsl(rgb);
+    const v = (hueDist(h, tone.hue) / 180) * Math.min(1, s * 1.6) * (tone.sat < 0.06 ? 0.3 : 1) + Math.abs(lum(rgb) - tone.lum) * 1.2;
+    if (v > score) { score = v; best = c; }
+  }
+  if (score >= 0.38) return best;
+  // 调色板里都不够显眼：取照片主色的对比色，按照片明暗定深浅
+  return toHex(hslToRgb((tone.hue + 180) % 360, 0.75, tone.lum > 0.5 ? 0.42 : 0.72));
+}
+
 /** 纸张底色：保证足够浅（参考图都是浅底） */
 export function paperColor(hex: string): string {
   let c = toRgb(hex) ?? CREAM;

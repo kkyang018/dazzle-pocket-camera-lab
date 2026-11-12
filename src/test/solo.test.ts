@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { maskToOutline } from "@/lib/solo/outline";
-import { inkColor, localPlan, paperColor, sanitizePlan, toRgb, lum } from "@/lib/solo/plan";
+import { inkColor, localPlan, paperColor, rgbToHsl, sanitizePlan, standOut, tintedPaper, toRgb, lum } from "@/lib/solo/plan";
 
 /** 画一个"人"：圆头 + 下半身一直延伸到画面底边（被裁到） */
 function personMask(w: number, h: number) {
@@ -49,6 +49,27 @@ describe("人物描边", () => {
     const p = o.paths[0]!;
     const [ax, ay] = p[0]!, [bx, by] = p[p.length - 1]!;
     expect(Math.hypot(ax - bx, ay - by)).toBeGreaterThan(0.03);
+  });
+});
+
+describe("跟着照片走的纸张和描边", () => {
+  const hsl = (h: string) => rgbToHsl(toRgb(h)!);
+  it("浅色纸亮、深色纸暗，色相跟照片一致", () => {
+    const tone = { hue: 120, sat: 0.3, lum: 0.5 };
+    const [h1, , l1] = hsl(tintedPaper(tone, false));
+    const [, , l2] = hsl(tintedPaper(tone, true));
+    expect(Math.abs(h1 - 120)).toBeLessThan(8);
+    expect(l1).toBeGreaterThan(0.8);
+    expect(l2).toBeLessThan(0.22);
+  });
+  it("照片越鲜艳，纸越素；照片越灰，纸越有颜色", () => {
+    const vivid = hsl(tintedPaper({ hue: 30, sat: 0.55, lum: 0.5 }, false))[1];
+    const dull = hsl(tintedPaper({ hue: 30, sat: 0.08, lum: 0.5 }, false))[1];
+    expect(dull).toBeGreaterThan(vivid);
+  });
+  it("绿色照片上的描边不用绿色", () => {
+    const c = standOut(["#6f9a4f", "#d2603a", "#e0a93a"], { hue: 110, sat: 0.4, lum: 0.45 });
+    expect(c).not.toBe("#6f9a4f");
   });
 });
 
