@@ -68,7 +68,7 @@ function drawSolo(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOption
 // ── ② 半格胶片：两张竖裁并排、满版、片基色分隔条（窄、不纯黑、边缘不齐）、轻颗粒 ───
 const HALF_BASE = "#2a2420"; // 片基色：深棕灰，不是纯黑
 function drawHalf(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOptions) {
-  const gap = W * (47 / 1500); // 1500 宽画布上 47px，导出时等比放大
+  const gap = W * (49 / 1500); // 1500 宽画布上 49px，导出时等比放大
   ctx.fillStyle = HALF_BASE;
   ctx.fillRect(0, 0, W, H);
   const fw = (W - gap) / 2;

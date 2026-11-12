@@ -64,7 +64,7 @@ function LabPage() {
           <LangToggle />
         </div>
         <h1 className="mt-6 font-serif text-[40px] leading-none font-black tracking-tight">Dazz Lab</h1>
-        <p className="mt-3 text-sm text-muted-foreground">{t("选一张照片，再挑一台相机冲洗它。", "Pick a photo, then choose a camera to develop it.")}</p>
+        <p className="mt-3 font-serif text-sm text-muted-foreground">{t("选一张照片，再挑一台相机冲洗它。", "Pick a photo, then choose a camera to develop it.")}</p>
         {showGuide && (
           <div className="guide-card relative mt-4 rounded-2xl border border-hairline bg-surface/60 px-3 pt-3 pb-2.5">
             {/* 三步之间的连线，一颗光点沿线走，走到哪一步哪一步亮 */}
@@ -77,7 +77,7 @@ function LabPage() {
                   <span className="guide-step grid size-7 place-items-center rounded-full border border-hairline bg-background" style={{ animationDelay: `${0.95 + i * 1.8}s` }}>
                     <Icon className="size-3.5" strokeWidth={1.8} />
                   </span>
-                  <span className="text-[11px] whitespace-nowrap text-foreground/85">{label}</span>
+                  <span className="font-serif text-[11px] whitespace-nowrap text-foreground/85">{label}</span>
                 </li>
               ))}
             </ol>
