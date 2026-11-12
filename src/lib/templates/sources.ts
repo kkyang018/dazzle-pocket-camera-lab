@@ -40,9 +40,33 @@ export async function thumbnail(item: AlbumItem) {
   return t.toDataURL("image/jpeg", 0.85);
 }
 
-const toFile = (canvas: HTMLCanvasElement, name: string) =>
-  new Promise<File>((res, rej) =>
-    canvas.toBlob((b) => (b ? res(new File([b], name, { type: "image/jpeg" })) : rej(new Error("encode"))), "image/jpeg", 0.92));
+/** 角上是透明的（拍立得相纸的圆角）就存 PNG，不然 JPEG 会把圆角外面填成黑色 */
+function hasTransparentCorner(canvas: HTMLCanvasElement) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return false;
+  return ctx.getImageData(0, 0, 1, 1).data[3]! < 255;
+}
+
+/** PNG 文件大，长边限制在 2400px（拍立得打印也足够清楚），手机保存、分享都更稳 */
+const PNG_MAX_EDGE = 2400;
+
+function toFile(canvas: HTMLCanvasElement, name: string) {
+  const png = hasTransparentCorner(canvas);
+  let src = canvas;
+  if (png && Math.max(canvas.width, canvas.height) > PNG_MAX_EDGE) {
+    const s = PNG_MAX_EDGE / Math.max(canvas.width, canvas.height);
+    src = document.createElement("canvas");
+    src.width = Math.round(canvas.width * s);
+    src.height = Math.round(canvas.height * s);
+    const c = src.getContext("2d")!;
+    c.imageSmoothingQuality = "high";
+    c.drawImage(canvas, 0, 0, src.width, src.height);
+  }
+  const type = png ? "image/png" : "image/jpeg";
+  const fileName = png ? name.replace(/\.jpe?g$/i, ".png") : name;
+  return new Promise<File>((res, rej) =>
+    src.toBlob((b) => (b ? res(new File([b], fileName, { type })) : rej(new Error("encode"))), type, 0.92));
+}
 
 /** 直接下载一个文件：隐藏的 <a download>，留在当前页面，不弹系统分享面板、不跳页 */
 function download(file: File) {

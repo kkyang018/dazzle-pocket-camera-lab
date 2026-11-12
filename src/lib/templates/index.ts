@@ -108,8 +108,8 @@ function polaroidCard(kind: PolaroidFormat): [number, number] {
 function drawPolaroid(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOptions) {
   const card = imgs[0]!;
   const dark = o.frame === 1;
-  ctx.fillStyle = dark ? "#0f0e0e" : "#f8f6f1";
-  ctx.fillRect(0, 0, W, H);
+  // 不先铺底色：相纸自带圆角，四角留透明，保存成 PNG 时圆角才保得住
+  ctx.clearRect(0, 0, W, H);
   ctx.drawImage(card, 0, 0, W, H);
   const [, iy, , ih] = innerRect(card, o.format);
   const s = W / 1080;
