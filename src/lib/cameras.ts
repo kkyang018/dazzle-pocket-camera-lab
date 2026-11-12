@@ -125,14 +125,17 @@ export const CAMERAS: Camera[] = [
     // 参考：雪林骑马、江边围巾两组 —— 整体棕琥珀、蓝绿退成橄榄、哑光抬黑、粗颗粒
     id: "brown400", name: "Brown 400", tagline: "复古棕调 · 电影质感", category: "film", icon: filmGreen, pro: false, flashTone: "warm",
     likes: { warmth: 0.6, sat: 0.4 },
-    preset: p({ exposure: -0.05, contrast: 0.97, saturation: 0.84, temperature: 0.62, tint: 0.07, fade: 0.2, grain: 0.12, grainSize: 1.3, vignette: 0.24,
+    preset: p({ exposure: -0.14, contrast: 1.07, saturation: 0.84, temperature: 0.62, tint: 0.07, fade: 0.2, grain: 0.12, grainSize: 1.3, vignette: 0.24,
       shadows: [0.035, 0.018, -0.018], highlights: [0.045, 0.025, -0.04],
       hsl: [{ hue: 205, width: 60, sat: 0.3, shift: -10 }, { hue: 115, width: 55, sat: 0.55, shift: -45 }, { hue: 30, width: 35, sat: 1.1, lum: -0.03 }] }),
   },
   {
-    id: "portra160", name: "Portra 160", tagline: "奶油肤色 · 柔和低反差", category: "film", icon: filmPortra, pro: true, flashTone: "warm",
-    likes: { skin: 0.8, sat: 0.4 },
-    preset: p({ exposure: 0.15, contrast: 0.9, saturation: 0.88, temperature: 0.3, tint: -0.08, fade: 0.12, grain: 0.05, vignette: 0.14, shadows: [0.02, 0.0, 0.02], highlights: [0.06, 0.03, 0.0] }),
+    // 参考：茶卡盐湖两组 —— 明亮、空气感、低饱和粉彩，橙色仍然跳，颗粒明显
+    id: "portra160", name: "Portra 160", tagline: "明媚低饱和 · 空气感", category: "film", icon: filmPortra, pro: true, flashTone: "warm",
+    likes: { lum: 0.65, sat: 0.35, skin: 0.6 },
+    preset: p({ exposure: 0.34, contrast: 0.9, saturation: 0.88, temperature: 0.1, tint: -0.03, fade: 0.15, grain: 0.09, grainSize: 1.2, vignette: 0.05,
+      shadows: [-0.01, 0.01, 0.025], highlights: [0.03, 0.02, 0.0],
+      hsl: [{ hue: 20, width: 30, sat: 1.25 }, { hue: 200, width: 50, sat: 0.9, lum: 0.02 }] }),
   },
   {
     id: "hp5", name: "HP5 黑白", tagline: "街头黑白 · 粗颗粒", category: "film", icon: filmBw, pro: true, flashTone: "neutral",
@@ -163,12 +166,13 @@ export const CAMERAS: Camera[] = [
   },
   {
     // 参考：海湾沙滩、仰拍大树两组 —— 高光发出暖金色光晕、颜色浓、青蓝通透，像油画
-    id: "glowdv", name: "Glow DV", tagline: "炫光油画 · 暖金发光", category: "ccd", icon: ccdDv, pro: true, flashTone: "warm",
+    id: "glowdv", name: "Glow DV", tagline: "炫光油画 · 柔光发亮", category: "ccd", icon: ccdDv, pro: true, flashTone: "warm",
     likes: { lum: 0.6, green: 0.5 },
-    preset: p({ exposure: 0.1, contrast: 1.04, saturation: 1.12, temperature: 0.28, tint: 0.02, fade: 0.05, grain: 0.03, vignette: 0.12,
-      shadows: [0.0, 0.01, 0.02], highlights: [0.04, 0.025, -0.01],
-      hsl: [{ hue: 50, width: 40, sat: 1.2 }, { hue: 190, width: 45, sat: 1.12, shift: -6 }, { hue: 100, width: 40, sat: 1.1, shift: -10 }],
-      bloom: { amount: 0.75, threshold: 0.5, radius: 0.035, tint: [1.0, 0.85, 0.6] } }),
+    // 光晕保留，色温和光的颜色收回来，不那么黄
+    preset: p({ exposure: 0.1, contrast: 1.04, saturation: 1.1, temperature: 0.1, tint: 0.0, fade: 0.05, grain: 0.03, vignette: 0.12,
+      shadows: [0.0, 0.01, 0.02], highlights: [0.025, 0.02, 0.005],
+      hsl: [{ hue: 50, width: 40, sat: 1.05 }, { hue: 190, width: 45, sat: 1.12, shift: -6 }, { hue: 100, width: 40, sat: 1.1, shift: -10 }],
+      bloom: { amount: 0.75, threshold: 0.5, radius: 0.035, tint: [1.0, 0.94, 0.84] } }),
   },
   {
     id: "pinkccd", name: "粉调 CCD", tagline: "元气粉 · 少女感", category: "ccd", icon: ccdCandy, pro: false, flashTone: "cool",
@@ -192,12 +196,9 @@ export const CAMERAS: Camera[] = [
     preset: p({ exposure: 0.18, contrast: 1.0, saturation: 1.05, temperature: -0.12, tint: -0.04, fade: 0.1, grain: 0.03, vignette: 0.1, shadows: [0.0, 0.01, 0.04], highlights: [0.02, 0.03, 0.04], frame: { kind: "mini", color: "#f7f6f2" } }),
   },
   {
-    // 参考：茶卡盐湖两组 —— 明亮、空气感、低饱和粉彩，橙色仍然跳，颗粒明显
-    id: "wide300", name: "Wide 300", tagline: "宽幅相纸 · 明媚低饱和", category: "instant", icon: instantWide, pro: false, flashTone: "soft",
-    likes: { lum: 0.65, sat: 0.35 },
-    preset: p({ exposure: 0.28, contrast: 0.9, saturation: 0.8, temperature: 0.1, tint: -0.03, fade: 0.16, grain: 0.09, grainSize: 1.2, vignette: 0.05,
-      shadows: [-0.01, 0.01, 0.025], highlights: [0.03, 0.02, 0.0],
-      hsl: [{ hue: 20, width: 30, sat: 1.25 }, { hue: 200, width: 50, sat: 0.85, lum: 0.02 }], frame: { kind: "wide", color: "#f6f5f1" } }),
+    id: "wide300", name: "Wide 300", tagline: "宽幅相纸 · 温润低饱和", category: "instant", icon: instantWide, pro: false, flashTone: "soft",
+    likes: { green: 0.5, contrast: 0.5 },
+    preset: p({ exposure: 0.05, contrast: 1.05, saturation: 0.9, temperature: 0.15, tint: 0.08, fade: 0.14, grain: 0.04, vignette: 0.18, shadows: [0.0, 0.02, 0.0], highlights: [0.04, 0.03, 0.0], frame: { kind: "wide", color: "#f6f5f1" } }),
   },
   {
     id: "dusk", name: "Dusk 70", tagline: "落日漏光 · 黑边相纸", category: "instant", icon: instantDusk, pro: true, flashTone: "warm",
