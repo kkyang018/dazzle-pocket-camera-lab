@@ -4,6 +4,7 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
   type ErrorComponentProps,
@@ -138,8 +139,17 @@ function RootComponent() {
 }
 
 // 手机优先：390px 宽的应用列，底部两个标签。
+// /landing 是给电脑和手机看的完整网页，不套手机外壳、标签栏和提示条。
 function AppShell() {
   const { quietMode } = useApp();
+  const fullPage = useRouterState({ select: (s) => s.location.pathname.startsWith("/landing") });
+  if (fullPage) {
+    return (
+      <div data-quiet={quietMode}>
+        <Outlet />
+      </div>
+    );
+  }
   return (
     <div data-quiet={quietMode} className="min-h-dvh bg-background">
       <HintBar />
