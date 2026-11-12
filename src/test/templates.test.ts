@@ -19,6 +19,18 @@ describe("成品模板规则", () => {
     expect(usable(p, ["film"])).toBe(false);
     expect(usable(p, [null])).toBe(false);
   });
+  it("拍立得照片：只能做手绘单张和拍立得；半格、拼图都不行", () => {
+    expect(usable(getTemplate("solo"), ["instant"])).toBe(true);
+    expect(usable(getTemplate("polaroid"), ["instant"])).toBe(true);
+    expect(blockReason(getTemplate("halfframe"), ["instant", "film"])).toBe("不能放拍立得照片");
+    expect(blockReason(getTemplate("collage"), ["ccd", "instant"])).toBe("不能放拍立得照片");
+    // 胶片、CCD：除了拍立得模板，其他三个都能用
+    expect(usable(getTemplate("solo"), ["ccd"])).toBe(true);
+    expect(usable(getTemplate("halfframe"), ["film", "ccd"])).toBe(true);
+    expect(usable(getTemplate("collage"), ["film", "ccd"])).toBe(true);
+    expect(usable(getTemplate("polaroid"), ["film"])).toBe(false);
+  });
+
   it("拼图用 2–4 张，不能放拍立得照片", () => {
     const c = getTemplate("collage");
     expect(blockReason(c, ["film"])).toBe("需要选 2–4 张");

@@ -132,7 +132,7 @@ function drawCollageTemplate(ctx: Ctx, W: number, H: number, imgs: Img[], o: Tem
 
 export const TEMPLATES: TemplateDef[] = [
   { id: "solo", name: "手绘单张", en: "Hand-drawn", min: 1, max: 1, ai: true, size: () => [1080, 1440], draw: drawSolo },
-  { id: "halfframe", name: "半格胶片", en: "Half-Frame", min: 2, max: 2, size: () => [1500, 1040], draw: drawHalf },
+  { id: "halfframe", name: "半格胶片", en: "Half-Frame", min: 2, max: 2, noInstant: true, size: () => [1500, 1040], draw: drawHalf },
   { id: "polaroid", name: "拍立得", en: "Polaroid", min: 1, max: 1, instantOnly: true, size: (o) => POLAROID[o.format].card, draw: drawPolaroid },
   { id: "collage", name: "拼图", en: "Collage", min: 2, max: 4, noInstant: true, size: () => [1080, Math.round((1080 * COLLAGE_CANVAS[1]) / COLLAGE_CANVAS[0])], draw: drawCollageTemplate },
 ];
