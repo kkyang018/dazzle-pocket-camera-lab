@@ -1,7 +1,7 @@
 import type { CameraCategory } from "@/lib/cameras";
 import type { PuzzleAI, StickerFamily } from "./ai-types";
 import { FONTS, cover, grain, rng, type Ctx, type Img } from "./draw";
-import { drawSoloCard } from "@/lib/solo/draw";
+import { drawSoloCard, type FrameKind } from "@/lib/solo/draw";
 import type { SoloData } from "@/lib/solo/types";
 
 export type { PuzzleAI, StickerFamily } from "./ai-types";
@@ -30,6 +30,10 @@ export type TemplateOptions = {
   pcrops: ([number, number] | null)[];
   /** 手绘单张：AI/本地计划 + 人物描边；null = 还在准备，只画照片 */
   solo: SoloData | null;
+  /** 手绘单张：深色纸 */
+  soloDark: boolean;
+  /** 手绘单张：拍立得照片保留相纸（img 是整张相纸） */
+  soloFrame: FrameKind | null;
   /** 拼图：AI 选的贴纸族/配色/主体位置 */
   puzzleAI: PuzzleAI | null;
 };
@@ -112,7 +116,7 @@ function crayonStroke(ctx: Ctx, pts: [number, number][], color: string, w: numbe
 
 // ── ① 手绘单张：原比例照片 + 蜡笔手绘（版式和图案见 src/lib/solo） ──────────
 function drawSolo(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOptions) {
-  drawSoloCard(ctx, W, H, imgs[0]!, o.solo, o.seed);
+  drawSoloCard(ctx, W, H, imgs[0]!, o.solo, o.seed, { dark: o.soloDark, frame: o.soloFrame });
 }
 
 // ── ② 半格胶片：两张竖裁并排、满版、黑分隔条、轻颗粒偏暖 ───────────
@@ -417,5 +421,5 @@ export function recommendTemplate(count: number, category: CameraCategory | null
 export function defaultOptions(place: string | null = null): TemplateOptions {
   const d = new Date();
   const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  return { caption: place ?? "", date, frame: 0, format: "mini", crops: [0.5, 0.5], swap: false, sticker: null, stickerColor: null, seed: 1, pcrops: [null, null, null, null], solo: null, puzzleAI: null };
+  return { caption: place ?? "", date, frame: 0, format: "mini", crops: [0.5, 0.5], swap: false, sticker: null, stickerColor: null, seed: 1, pcrops: [null, null, null, null], solo: null, soloDark: false, soloFrame: null, puzzleAI: null };
 }

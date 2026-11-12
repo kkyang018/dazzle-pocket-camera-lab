@@ -144,7 +144,8 @@ export function maskToOutline(mask: Mask, w: number, h: number, threshold = 0.5,
     const x = i % w, y = (i / w) | 0;
     if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
   }
-  const r = Math.max(2, Math.round(Math.max(w, h) * 0.014));
+  // 描边不贴着人，往外错开一点（约画面长边的 3%）
+  const r = Math.max(3, Math.round(Math.max(w, h) * 0.03));
   const grown = dilate(person, w, h, r);
   const grownComp = components(grown, w, h);
 

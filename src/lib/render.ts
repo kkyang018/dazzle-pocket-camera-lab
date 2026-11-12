@@ -73,7 +73,8 @@ function mulberry32(seed: number) {
   };
 }
 
-const FRAMES = {
+/** 拍立得相纸边距（相对照片宽度）；成品模板要知道照片在相纸里的位置 */
+export const FRAMES = {
   square: { aspect: 1, side: 0.06, top: 0.06, bottom: 0.24 },
   mini: { aspect: 0.74, side: 0.075, top: 0.09, bottom: 0.28 },
   wide: { aspect: 1.55, side: 0.04, top: 0.045, bottom: 0.14 },

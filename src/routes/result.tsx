@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { puzzleStyle, soloPlan } from "@/lib/ai/vision.functions";
 import { analyzeScene } from "@/lib/scene";
-import { averageColor } from "@/lib/solo/draw";
+import { averageColor, cropInner } from "@/lib/solo/draw";
 import { localPlan } from "@/lib/solo/plan";
 import { personOutline } from "@/lib/solo/segment";
 import type { SoloData } from "@/lib/solo/types";
@@ -66,7 +66,7 @@ function ResultPage() {
     setOpts((o) => ({ ...o, format: paper.kind, frame: dark ? 1 : 0 }));
   }, [paper?.kind, paper?.color]);
   useEffect(() => { if (lead?.place) setOpts((o) => (o.caption ? o : { ...o, caption: lead.place! })); }, [lead?.place]);
-  const [imgs, setImgs] = useState<HTMLCanvasElement[] | null>(null);
+  const [imgState, setImgs] = useState<{ key: string; list: HTMLCanvasElement[] } | null>(null);
   const [saving, setSaving] = useState(false);
   const canvas = useRef<HTMLCanvasElement>(null);
   const drag = useRef<{ x: number; y: number; side: number; start: [number, number]; rw: number; rh: number } | null>(null);
@@ -79,20 +79,28 @@ function ResultPage() {
   const t = getTemplate(tid);
   const ok = usable(t, cats);
   const ids = items.map((i) => i.id).join(",");
+  // 拍立得照片做手绘单张：保留整张相纸（其他模板自己画相纸/版式，用去掉相纸的照片）
+  const soloFrame = tid === "solo" && lead?.category === "instant" ? (lead.look?.frame?.kind ?? null) : null;
+  const bare = !soloFrame;
+  const imgKey = `${ids}|${bare}`;
+  // 只用和当前设置匹配的那批图（切换模板时旧图可能还在）
+  const imgs = imgState?.key === imgKey ? imgState.list : null;
 
   useEffect(() => {
     let alive = true;
     setImgs(null);
-    Promise.all([loadFonts(), ...items.map((i) => developed(i, undefined, true))]).then(([, ...c]) => alive && setImgs(c as HTMLCanvasElement[]));
+    Promise.all([loadFonts(), ...items.map((i) => developed(i, undefined, bare))]).then(([, ...c]) => alive && setImgs({ key: imgKey, list: c as HTMLCanvasElement[] }));
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ids]);
+  }, [imgKey]);
 
   // 手绘单张：本机找人物轮廓 → 先用本地规则出一版 → AI 看图给主题/配色/图案后替换。
   // 结果按照片组缓存；"换一组"只重新排版，不再调 AI。
   useEffect(() => {
-    const img = imgs?.[0];
-    if (!img || tid !== "solo" || solo[ids] || soloBusy[ids]) return;
+    const raw = imgs?.[0];
+    if (!raw || tid !== "solo" || solo[ids] || soloBusy[ids]) return;
+    // 拍立得只看相纸里的照片部分
+    const img = cropInner(raw, soloFrame);
     let alive = true;
     setSoloBusy((m) => ({ ...m, [ids]: true }));
     void (async () => {
@@ -128,8 +136,9 @@ function ResultPage() {
   const full = useMemo<TemplateOptions>(() => ({
     ...opts,
     solo: sState ?? null,
+    soloFrame,
     puzzleAI: pState && typeof pState === "object" ? pState : null,
-  }), [opts, sState, pState]);
+  }), [opts, sState, pState, soloFrame]);
 
   const [w, h] = t.size(opts);
   useEffect(() => {
@@ -186,7 +195,7 @@ function ResultPage() {
     setSaving(true);
     try {
       const n = takeCount(t, items.length);
-      const srcs = await Promise.all(items.slice(0, n).map((i) => exportSource(i, true)));
+      const srcs = await Promise.all(items.slice(0, n).map((i) => exportSource(i, bare)));
       const s = EXPORT_LONG / Math.max(w, h);
       const out = document.createElement("canvas");
       out.width = Math.round(w * s);
@@ -276,6 +285,14 @@ function ResultPage() {
                     {sState?.plan.source === "ai" ? "AI 看图选的图案和配色" : aiBusy ? "AI 正在看图…" : "本地配色（AI 未连上）"}
                   </span>
                   <button type="button" onClick={() => set("seed", opts.seed + 1)} disabled={!sState} className={cn(chip(false), "ml-auto flex items-center gap-1 disabled:opacity-50")}><Shuffle className="size-3" />换一组</button>
+                </div>
+              </Field>
+            )}
+            {t.id === "solo" && (
+              <Field label={soloFrame ? "背景 · 拍立得相纸放在纸上" : "背景"}>
+                <div className="flex gap-2">
+                  <button type="button" aria-pressed={!opts.soloDark} onClick={() => set("soloDark", false)} className={chip(!opts.soloDark)}>浅色</button>
+                  <button type="button" aria-pressed={opts.soloDark} onClick={() => set("soloDark", true)} className={chip(opts.soloDark)}>深色</button>
                 </div>
               </Field>
             )}
