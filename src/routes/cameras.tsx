@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { CameraCard } from "@/components/app/camera-card";
@@ -54,6 +54,14 @@ function CamerasPage() {
     if (stats) recInTab.sort((a, b) => scoreCamera(b.likes, stats) - scoreCamera(a.likes, stats));
     return orderCameras(inTab, recInTab.map((c) => c.id), pinned);
   }, [tab, recommendedIds, pinned, stats]);
+
+  // 照片分析完成后推荐相机会插到最前面，浏览器的滚动锚定会把整排往右推，
+  // 导致第一台（AI 推荐）被挡在左边看不到。排序变化时回到开头。
+  const rowRef = useRef<HTMLDivElement>(null);
+  const rowKey = row.map((c) => c.id).join(",");
+  useLayoutEffect(() => {
+    if (rowRef.current) rowRef.current.scrollLeft = 0;
+  }, [rowKey]);
 
   if (!photo) {
     return (
@@ -125,9 +133,10 @@ function CamerasPage() {
 
       <div
         key={tab}
+        ref={rowRef}
         role="tabpanel"
         aria-label={CATEGORIES.find((c) => c.id === tab)?.label}
-        className="scrollbar-none -mx-5 mt-2 flex shrink-0 snap-x scroll-px-5 gap-2.5 overflow-x-auto px-5 py-1"
+        className="scrollbar-none -mx-5 mt-2 flex shrink-0 snap-x scroll-px-5 gap-2.5 overflow-x-auto px-5 py-1 [overflow-anchor:none]"
       >
         {row.map((c) => (
           <CameraCard

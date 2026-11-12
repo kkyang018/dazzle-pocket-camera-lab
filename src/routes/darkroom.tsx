@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ChevronLeft, Download, Inbox, SplitSquareHorizontal } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AiMark, ApproxTag, ProMark } from "@/components/app/marks";
+import { AiMark, ApproxTag, PRO_HINT, ProMark } from "@/components/app/marks";
 import { ExposureDial, Ruler } from "@/components/darkroom/controls";
 import { usePhotoBase } from "@/hooks/use-photo-base";
 import { useApp } from "@/lib/app-state";
@@ -347,10 +347,11 @@ function DarkroomPage() {
       {/* 调节面板：一屏内切换 */}
       <section className="relative z-10 mt-2 shrink-0 rounded-2xl bg-surface p-3">
         <div role="tablist" aria-label="调节" className="mb-2.5 grid grid-cols-2 gap-1 rounded-full bg-background/60 p-0.5 text-xs">
-          {([["basic", "基础调节"], ["pro", "暗房模式 · 颗粒/褪色/锐化"]] as const).map(([id, label]) => (
-            <button key={id} type="button" role="tab" aria-selected={panel === id} onClick={() => setPanel(id)}
-              className={cn("flex items-center justify-center gap-1 rounded-full py-1.5 text-[11px]", panel === id ? "bg-surface-raised font-medium text-foreground" : "text-muted-foreground")}>
-              {label}{id === "pro" && <ProMark />}
+          {([["basic", "基础调节"], ["pro", "暗房模式"]] as const).map(([id, label]) => (
+            <button key={id} type="button" role="tab" aria-selected={panel === id}
+              onClick={() => { setPanel(id); if (id === "pro" && panel !== "pro") showHint(PRO_HINT, "pro"); }}
+              className={cn("flex items-center justify-center gap-1 whitespace-nowrap rounded-full py-1.5 text-[11px]", panel === id ? "bg-surface-raised font-medium text-foreground" : "text-muted-foreground")}>
+              {label}{id === "pro" && <ProMark inline />}
             </button>
           ))}
         </div>

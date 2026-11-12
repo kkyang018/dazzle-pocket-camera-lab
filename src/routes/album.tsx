@@ -72,10 +72,10 @@ function AlbumPage() {
     <main className="theme-warm min-h-[calc(100dvh-4rem)] px-4 pt-[max(env(safe-area-inset-top),1rem)] pb-32">
       <header className="flex items-end justify-between">
         <div>
-          <button type="button" onClick={() => (window.history.length > 1 ? window.history.back() : navigate({ to: "/" }))}
-            className="-ml-2 mb-1 flex items-center gap-0.5 px-2 py-1 font-mono text-[11px] text-muted-foreground" aria-label="返回">
-            <ChevronLeft className="size-4" /> 返回
-          </button>
+          {/* 固定回 Lab：用 history.back 会和成品页的「印样台」互相跳成死循环 */}
+          <Link to="/" className="-ml-2 mb-1 flex w-fit items-center gap-0.5 px-2 py-1 font-mono text-[11px] text-muted-foreground">
+            <ChevronLeft className="size-4" /> Lab
+          </Link>
           <p className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground uppercase">Contact sheet · {album.length}</p>
           <h1 className="mt-1 font-serif text-[28px] font-black leading-none">印样台</h1>
         </div>
@@ -112,8 +112,9 @@ function AlbumPage() {
       <div className="fixed inset-x-0 bottom-20 z-30 mx-auto flex w-full max-w-[390px] justify-center px-4">
         {live.length > 0 ? (
           <div className="flex w-full gap-2">
-            {picked.some((a) => a.photo.origin === "album") && (
-              <button type="button" aria-label="从印样台删除" onClick={() => removeFromAlbum(picked.filter((a) => a.photo.origin === "album").map((a) => a.id))}
+            {/* id > 0 是显影/导入的照片（可删）；内置样片 id < 0，不可删 */}
+            {picked.some((a) => a.id > 0) && (
+              <button type="button" aria-label="从印样台删除" onClick={() => removeFromAlbum(picked.filter((a) => a.id > 0).map((a) => a.id))}
                 className="grid size-12 shrink-0 place-items-center rounded-full bg-card text-foreground shadow-lg">
                 <Trash2 className="size-4" />
               </button>

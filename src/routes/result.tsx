@@ -218,7 +218,7 @@ function ResultPage() {
                   <span className="block font-mono text-[9px] opacity-60">{x.instantOnly ? "仅拍立得" : `${x.min === x.max ? x.min : `${x.min}–${x.max}`}张`}</span>
                   <span className="absolute -top-1.5 -right-1 flex gap-0.5">
                     {(x.id === rec || x.ai) && <AiMark className="size-3.5" label={x.id === rec ? "AI 推荐" : "AI 配色"} />}
-                    {x.pro && <ProMark className="size-3.5" />}
+                    {x.pro && <ProMark inline className="size-3.5" />}
                   </span>
                 </button>
               );

@@ -3,9 +3,22 @@ import { useApp } from "@/lib/app-state";
 
 export const PRO_HINT = "Pro 功能 · 试用中";
 
-/** Pro 标记：琥珀色圆环角标（类似 ®），点击只显示一行提示，不弹窗。 */
-export function ProMark({ className }: { className?: string }) {
+const PRO_MARK_CLASS =
+  "inline-grid size-3.5 shrink-0 place-items-center rounded-full border-[1.5px] border-pro font-mono text-[7.5px] font-semibold leading-none text-pro";
+
+/**
+ * Pro 标记：琥珀色圆环角标（类似 ®），点击只显示一行提示，不弹窗。
+ * 放在别的按钮里面时传 `inline`：只画角标，不再嵌套 <button>，由外层按钮负责提示。
+ */
+export function ProMark({ className, inline = false }: { className?: string; inline?: boolean }) {
   const { showHint } = useApp();
+  if (inline) {
+    return (
+      <span aria-hidden className={cn(PRO_MARK_CLASS, className)}>
+        P
+      </span>
+    );
+  }
   return (
     <button
       type="button"
@@ -15,10 +28,7 @@ export function ProMark({ className }: { className?: string }) {
         e.stopPropagation();
         showHint(PRO_HINT, "pro");
       }}
-      className={cn(
-        "inline-grid size-3.5 shrink-0 place-items-center rounded-full border-[1.5px] border-pro font-mono text-[7.5px] font-semibold leading-none text-pro",
-        className,
-      )}
+      className={cn(PRO_MARK_CLASS, className)}
     >
       P
     </button>

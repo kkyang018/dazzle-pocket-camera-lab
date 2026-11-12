@@ -115,6 +115,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setAlbum((a) => a.map((x) => (x.id === id ? { ...x, place } : x)));
         void putItem({ ...rec, place });
       });
+    } else if (sample) {
+      // 样片显影后也要存下来，否则刷新就丢了：取回打包的样片图存成 blob
+      void fetch(item.photo.src)
+        .then((r) => r.blob())
+        .then((blob) => putItem({ id, blob, name: item.photo.name, width: item.photo.width, height: item.photo.height,
+          look: item.look, cameraName: item.cameraName, category: item.category, place: item.photo.name }))
+        .catch(() => undefined);
     }
     return id;
   }, []);
