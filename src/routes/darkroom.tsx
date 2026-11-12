@@ -254,7 +254,7 @@ function DarkroomPage() {
         </button>
       </div>
     );
-  const tip = developing ? "点一下照片跳过" : phase === "done" ? "已收进印样台 · 可直接保存，或去印样台做成品" : isInstant ? "拖动照片调整裁剪 · 点照片看细节" : "点照片看细节 · 调好后按显影";
+  const tip = developing ? "点一下照片跳过" : phase === "done" ? "拖进印样台做成品" : isInstant ? "拖动调整裁剪 · 点照片看细节" : "点照片看细节 · 调好后显影";
   const devRow = (
     <div className="relative z-10 flex shrink-0 items-center gap-2 py-2">
       {devButton}
@@ -328,9 +328,10 @@ function DarkroomPage() {
           </div>
         )}
       </section>
-      <div className="relative z-10 mt-1.5 flex shrink-0 items-center gap-2">
+      {/* 提示文字相对整行居中（不受左边标签、右边按钮宽度不同的影响） */}
+      <div className="relative z-10 mt-1.5 flex shrink-0 items-center justify-between gap-2">
         <ApproxTag className="shrink-0" />
-        <p className="min-w-0 flex-1 truncate text-center font-mono text-[10px] text-muted-foreground">{tip}</p>
+        <p className="pointer-events-none absolute inset-x-[4.5rem] truncate text-center font-mono text-[10px] text-muted-foreground">{tip}</p>
           <button
         type="button"
         onPointerDown={(e) => { e.stopPropagation(); e.currentTarget.setPointerCapture(e.pointerId); setOriginal(true); }}

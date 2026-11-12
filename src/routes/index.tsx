@@ -1,7 +1,6 @@
 import { useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ImagePlus, Loader2 } from "lucide-react";
-import { LocalProcessingNote } from "@/components/app/local-note";
 import { useApp } from "@/lib/app-state";
 import { photoFromFile, photoFromSample } from "@/lib/photo";
 import { cn } from "@/lib/utils";
@@ -139,8 +138,6 @@ function LabPage() {
           </ul>
         </section>
       </div>
-
-      <LocalProcessingNote className="pb-5" />
     </main>
   );
 }

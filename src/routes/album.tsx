@@ -85,7 +85,6 @@ function AlbumPage() {
         </button>
         <input ref={input} type="file" accept="image/*" multiple className="sr-only" tabIndex={-1} aria-hidden onChange={onFile} />
       </header>
-      <p className="mt-2 text-[12px] text-muted-foreground">轻点照片勾选 1–{MAX_SELECT} 张，可以保存到手机、做成成品（1 张：手绘单张 / 拍立得 · 2 张：半格 / 拼图 · 3–4 张：拼图），选 1 张时还能再送进暗房冲洗。照片只存在这台设备的浏览器里。</p>
 
       <ul className="mt-4 grid grid-cols-3 gap-1.5">
         {album.map((a) => {

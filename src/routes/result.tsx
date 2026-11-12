@@ -400,9 +400,7 @@ function ResultPage() {
             className="mt-4 flex items-center justify-center gap-2 rounded-full bg-primary py-3 font-medium text-primary-foreground disabled:opacity-60">
             {saving && <Loader2 className="size-4 animate-spin" />}保存到相册
           </button>
-          <Link to="/album" className="mt-2 text-center text-[12px] text-muted-foreground underline-offset-2 hover:underline">回印样台再做一张</Link>
-          <p className="mt-2 text-center font-mono text-[10px] text-muted-foreground">用原图重新渲染 · JPG · 只在本机处理</p>
-        </>
+          <Link to="/album" className="mt-2 text-center text-[12px] text-muted-foreground underline-offset-2 hover:underline">回印样台再做一张</Link>        </>
       )}
     </main>
   );

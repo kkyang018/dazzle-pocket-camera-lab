@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Switch } from "@/components/ui/switch";
 import { AiMark, ApproxTag, ProMark } from "@/components/app/marks";
-import { LocalProcessingNote } from "@/components/app/local-note";
 import { useApp } from "@/lib/app-state";
 
 export const Route = createFileRoute("/me")({
@@ -59,8 +58,7 @@ function MePage() {
           <InfoRow title="保存位置" desc="印样台的照片只存在这台设备的浏览器里，清除浏览器数据后会消失" />
         </ul>
       </section>
-
-      <LocalProcessingNote className="py-8" />
+      <div className="h-8" />
     </main>
   );
 }

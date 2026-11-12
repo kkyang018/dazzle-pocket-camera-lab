@@ -182,9 +182,6 @@ function CamerasPage() {
             "先选一台相机"
           )}
         </button>
-        {camera && (
-          <p className="mt-1.5 text-center font-mono text-[10px] text-muted-foreground">暗房里可以调曝光和色温 · AI 建议 · 显影</p>
-        )}
       </div>
     </main>
   );
