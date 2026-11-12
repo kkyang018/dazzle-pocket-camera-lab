@@ -116,7 +116,8 @@ export function renderWithPreset(src: HTMLCanvasElement, p: Preset, seed = 7) {
   const bands = p.hsl?.map((b) => ({ hue: b.hue, width: b.width ?? 45, sat: b.sat ?? 1, lum: b.lum ?? 0, shift: ((b.shift ?? 0) * Math.PI) / 180 }));
   // 局部对比：先取一张很糊的底图，像素和它的差就是"细节"，按比例放大
   const clarity = p.clarity ?? 0;
-  const blur = clarity > 0 ? blurredData(src, sx, sy, sw, sh, 0.02) : null;
+  // 半径取大一点（长边的 4%）：提的是整体层次，而不是皮肤、噪点这类细纹理
+  const blur = clarity > 0 ? blurredData(src, sx, sy, sw, sh, 0.04) : null;
   // 直闪：中心提亮、边缘快速衰减、反差更硬
   const fl = p.flash ?? 0;
   const tone = p.flashTone ?? "neutral";
@@ -134,7 +135,9 @@ export function renderWithPreset(src: HTMLCanvasElement, p: Preset, seed = 7) {
       if (blur) {
         const l0 = 0.299 * r + 0.587 * g + 0.114 * b;
         const mid = 4 * Math.min(1, Math.max(0, l0)) * (1 - Math.min(1, Math.max(0, l0)));
-        const k = clarity * 1.6 * mid;
+        // 肤色（红 > 绿 > 蓝、偏橙）几乎不加局部对比，免得把斑点毛孔放大、脸显脏
+        const skin = r > g && g > b && r - b > 0.05 && r - b < 0.5 && g - b > 0.01 ? 0.15 : 1;
+        const k = clarity * 1.6 * mid * skin;
         r += (r - (blur[i]! / 255) * ev * wbR) * k;
         g += (g - (blur[i + 1]! / 255) * ev * wbG) * k;
         b += (b - (blur[i + 2]! / 255) * ev * wbB) * k;

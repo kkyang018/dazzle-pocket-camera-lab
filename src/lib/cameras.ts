@@ -160,7 +160,7 @@ export const CAMERAS: Camera[] = [
     // 参考：铁道口、便利店两组 —— 暗部打开、天空冷青、灯光和高光偏暖、局部对比清晰
     id: "cybert", name: "Cyber T", tagline: "质感通透 · 冷暖分离", category: "ccd", icon: ccdCyber, pro: false, flashTone: "cool",
     likes: { contrast: 0.7, lum: 0.45 },
-    preset: p({ exposure: 0.1, contrast: 1.04, saturation: 0.98, temperature: 0.05, tint: 0, fade: 0.08, grain: 0.03, vignette: 0.1, clarity: 0.4,
+    preset: p({ exposure: 0.14, contrast: 1.03, saturation: 0.98, temperature: 0.05, tint: 0, fade: 0.1, grain: 0.03, vignette: 0.08, clarity: 0.2,
       shadows: [-0.02, 0.005, 0.025], highlights: [0.035, 0.02, -0.015],
       hsl: [{ hue: 30, width: 35, sat: 1.15 }, { hue: 210, width: 50, sat: 0.95, shift: -12 }, { hue: 110, width: 45, sat: 0.8 }] }),
   },
