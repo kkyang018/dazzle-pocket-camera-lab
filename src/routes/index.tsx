@@ -23,7 +23,7 @@ export const Route = createFileRoute("/")({
 });
 
 function LabPage() {
-  const { setPhoto, setRewashId, album } = useApp();
+  const { setPhoto, setRewashId, album, lang } = useApp();
   const t = useT();
   // 新手引导：印样台里还没有自己的照片时显示，也可以手动关掉（只在本次打开有效）
   const [guideClosed, setGuideClosed] = useState(false);
@@ -64,7 +64,7 @@ function LabPage() {
           <LangToggle />
         </div>
         <h1 className="mt-6 font-serif text-[40px] leading-none font-black tracking-tight">Dazz Lab</h1>
-        <p className="mt-3 font-serif text-sm text-muted-foreground">{t("选一张照片，再挑一台相机冲洗它。", "Pick a photo, then choose a camera to develop it.")}</p>
+        <p className={cn("mt-3 text-muted-foreground", lang === "en" ? "font-mono text-[11px] tracking-wide" : "font-serif text-sm")}>{t("选一张照片，再挑一台相机冲洗它。", "Pick a photo, then choose a camera to develop it.")}</p>
         {showGuide && (
           <div className="guide-card relative mt-4 rounded-2xl border border-hairline bg-surface/60 px-3 pt-3 pb-2.5">
             {/* 三步之间的连线，一颗光点沿线走，走到哪一步哪一步亮 */}
