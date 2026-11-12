@@ -118,16 +118,22 @@ function flower(r: Rand): Stroke[] {
 }
 
 function cloud(r: Rand): Stroke[] {
-  // 扇贝边的云：上半圈鼓包，下边较平
+  // 手绘蓬松云：顶上 3–4 个高低不一的圆鼓包，底边一条略微上翘的平线，不闭合成圈
+  const n = 3 + Math.floor(r() * 2);
+  const ws = Array.from({ length: n }, (_, i) => (i === 1 || i === n - 2 ? 1.25 : 0.85) * (0.85 + r() * 0.3));
+  const tot = ws.reduce((a, b) => a + b, 0);
   const pts: Pt[] = [];
-  const bumps = 4 + Math.floor(r() * 2);
-  for (let i = 0; i <= 120; i++) {
-    const t = (i / 120) * Math.PI * 2;
-    const upper = Math.sin(t) < 0;
-    const bump = upper ? 0.2 * Math.abs(Math.sin(t * bumps * 0.5 + 0.3)) : 0.04 * Math.abs(Math.sin(t * 3));
-    pts.push([Math.cos(t) * (1 + bump), Math.sin(t) * (upper ? 0.62 : 0.34) * (1 + bump)]);
-  }
-  return [{ pts, style: r() < 0.6 ? "dash" : "solid" }];
+  let x = -1;
+  const base = 0.32;
+  ws.forEach((w, i) => {
+    const bw = (w / tot) * 2, rx = bw / 2;
+    const ry = rx * (1.05 + r() * 0.2) * (i === 0 || i === n - 1 ? 0.8 : 1);
+    pts.push(...arc(x + rx, base, rx, ry, Math.PI, 2 * Math.PI, 16).slice(i ? 1 : 0));
+    x += bw;
+  });
+  // 底边：从右往回，留一点缺口像手画的收笔
+  const bottom: Pt[] = Array.from({ length: 9 }, (_, i) => { const t = i / 8; return [1 - t * 1.85, base + Math.sin(t * Math.PI) * 0.05] as Pt; });
+  return [{ pts: [...pts, ...bottom], style: "solid" }];
 }
 
 function bird(r: Rand): Stroke[] {

@@ -131,3 +131,18 @@ describe("手绘配色", () => {
     expect(p.source).toBe("local");
   });
 });
+
+describe("photoPalette", () => {
+  it("浅色纸上线条明度在 0.55–0.72，色相都来自给定颜色", async () => {
+    const { photoPalette, rgbToHsl, toRgb } = await import("@/lib/solo/plan");
+    const src = ["#2a5f8a", "#d9a35a", "#7aa24a"];
+    for (const seed of [1, 2, 3]) {
+      const p = photoPalette(src, [], { hue: 210, sat: 0.3, lum: 0.5 }, false, seed);
+      for (const c of p.colors) {
+        const [h, , l] = rgbToHsl(toRgb(c)!);
+        expect(l).toBeGreaterThanOrEqual(0.54); expect(l).toBeLessThanOrEqual(0.73);
+        expect(src.some((s) => Math.min(Math.abs(rgbToHsl(toRgb(s)!)[0] - h), 360 - Math.abs(rgbToHsl(toRgb(s)!)[0] - h)) < 3)).toBe(true);
+      }
+    }
+  });
+});

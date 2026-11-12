@@ -5,7 +5,7 @@ import { analyzeScene } from "@/lib/scene";
 import { grain, noShadow, rng, softShadow, type Ctx, type Img } from "@/lib/templates/draw";
 import { crayon, spline, type LineStyle, type Pt } from "./crayon";
 import { MOTIFS, accentStrokes, type Stroke } from "./motifs";
-import { lum, rgbToHsl, schemePalette, standOut, tintedPaper, toHex, toRgb, type Tone } from "./plan";
+import { lum, photoPalette, pickInPhoto, rgbToHsl, tintedPaper, toHex, toRgb, type Tone } from "./plan";
 import type { Anchor, MotifSize, Outline, SoloData } from "./types";
 
 export type PhotoRect = { px: number; py: number; pw: number; ph: number };
@@ -254,8 +254,7 @@ export function drawSoloCard(ctx: Ctx, W: number, H: number, img: Img, data: Sol
   // 纸张颜色跟照片色调走：浅色亮、深色暗；照片越鲜艳纸越素
   // AI（或本地规则）选的线条色里，第一种有颜色、又不是暖橙的色相，用来区分暖色照片
   // 配色：AI 给的第一种颜色定基调色相（没有就用照片主色），再按"换一组"轮换情绪和色相搭配
-  const aiHsl = plan?.colors.map((c) => rgbToHsl(toRgb(c) ?? [128, 128, 128])).find(([, s]) => s > 0.2);
-  const scheme = schemePalette(aiHsl?.[0] ?? tone.hue, seed, tone, look.dark, analyzeScene(photo).palette);
+  const scheme = photoPalette(plan?.colors ?? [], analyzeScene(photo).palette, tone, look.dark, seed);
   const paper = plan ? scheme.paper : tintedPaper(tone, look.dark, null);
   ctx.fillStyle = paper;
   ctx.fillRect(0, 0, W, H);
@@ -281,7 +280,7 @@ export function drawSoloCard(ctx: Ctx, W: number, H: number, img: Img, data: Sol
   // 纸上的线条：已按纸张调好明度
   const colors = scheme.colors;
   // 画在照片上的描边和点缀：挑和照片主色相差最远的颜色（绿照片不用绿线）
-  const inPhoto = standOut(colors, tone);
+  const inPhoto = pickInPhoto(colors, tone);
   const inPhoto2 = colors.find((c) => c !== inPhoto) ?? inPhoto;
   const rand = rng(seed * 7919 + 17);
   const flip = seed % 2 === 0; // "换一组"时左右镜像，再加上随机抖动

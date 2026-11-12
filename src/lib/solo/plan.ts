@@ -255,3 +255,39 @@ export function localPlan(s: LocalStats, hasPerson: boolean, avg: RGB | null): S
 }
 
 export { ANCHORS };
+
+/**
+ * 手绘单张配色：只用 AI 给的颜色和照片里取到的颜色（不按色轮硬转），
+ * 浅色纸配明度 0.55–0.72 的柔和线，深色纸配 0.68–0.82 的提亮线，不会混进深浊色。
+ * "换一组"按 seed 轮换起点，换的是照片里的不同颜色组合。
+ */
+export function photoPalette(aiColors: string[], photoColors: string[], tone: Tone, dark: boolean, seed: number): { colors: string[]; paper: string } {
+  const src = [...aiColors, ...photoColors]
+    .map((c) => toRgb(c)).filter((c): c is RGB => !!c)
+    .map((c) => rgbToHsl(c)).filter(([, s]) => s > 0.1);
+  if (!src.length) src.push([tone.hue, 0.4, 0.6]);
+  const norm = ([h, s, l]: [number, number, number]) =>
+    toHex(hslToRgb(h, Math.min(0.68, Math.max(0.35, s)), dark ? Math.min(0.82, Math.max(0.68, l)) : Math.min(0.72, Math.max(0.55, l))));
+  const start = (seed - 1) % src.length;
+  const ordered = [...src.slice(start), ...src.slice(0, start)];
+  const picked: [number, number, number][] = [];
+  for (const c of ordered) if (picked.every((p) => hueDist(p[0], c[0]) > 25)) picked.push(c);
+  for (const c of ordered) if (picked.length < 3 && !picked.includes(c)) picked.push(c);
+  // 只有一种颜色时：同色相深浅两支
+  while (picked.length < 2) picked.push([picked[0]![0], picked[0]![1] * 0.8, picked[0]![2] + 0.1]);
+  const colors = picked.slice(0, 3).map(norm);
+  const ph = tone.sat < 0.06 ? picked[0]![0] : tone.hue;
+  const paper = toHex(dark ? hslToRgb(ph, 0.3, 0.16) : hslToRgb(ph, Math.min(0.35, Math.max(0.12, 0.45 - tone.sat * 0.6)), 0.92));
+  return { colors, paper };
+}
+
+/** 照片上的描边色：只在已有颜色里挑和照片主色反差最大的那支，不再另造颜色 */
+export function pickInPhoto(colors: string[], tone: Tone): string {
+  let best = colors[0]!, score = -1;
+  for (const c of colors) {
+    const rgb = toRgb(c)!; const [h] = rgbToHsl(rgb);
+    const v = hueDist(h, tone.hue) / 180 + Math.abs(lum(rgb) - tone.lum) * 1.2;
+    if (v > score) { score = v; best = c; }
+  }
+  return best;
+}
