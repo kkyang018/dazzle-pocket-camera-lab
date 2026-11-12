@@ -54,6 +54,14 @@ export type Preset = {
   frame?: { kind: "square" | "mini" | "wide"; color: string };
   /** 锐化 0…1 */
   sharpen?: number;
+  /** 按色相单独调：hue 中心（度）、width 影响范围（度，默认 45）、sat 饱和倍数、lum 明度加减、shift 色相偏移（度） */
+  hsl?: { hue: number; width?: number; sat?: number; lum?: number; shift?: number }[];
+  /** 高光发光（炫光）：amount 强度、threshold 从多亮开始发光、radius 光晕大小（相对长边）、tint 光的颜色倍数 */
+  bloom?: { amount: number; threshold: number; radius: number; tint: RGB };
+  /** 局部对比（质感/清晰度）0…1 */
+  clarity?: number;
+  /** 颗粒大小倍数（默认 1，越大越粗） */
+  grainSize?: number;
   /** 画幅裁剪中心 0…1（默认居中） */
   cropX?: number;
   cropY?: number;
@@ -112,9 +120,12 @@ export const CAMERAS: Camera[] = [
       leak: { x: 1, y: 0.05, color: "255,130,40", strength: 0.2 } }),
   },
   {
-    id: "superia400", name: "Superia 400", tagline: "富士青绿 · 日系通透", category: "film", icon: filmGreen, pro: false, flashTone: "neutral",
-    likes: { green: 0.8, warmth: 0.45 },
-    preset: p({ exposure: 0.05, contrast: 1.04, saturation: 0.95, temperature: -0.2, tint: 0.4, fade: 0.14, grain: 0.08, vignette: 0.2, shadows: [-0.03, 0.04, 0.04], highlights: [0.02, 0.03, -0.01] }),
+    // 参考：雪林骑马、江边围巾两组 —— 整体棕琥珀、蓝绿退成橄榄、哑光抬黑、粗颗粒
+    id: "brown400", name: "Brown 400", tagline: "复古棕调 · 电影质感", category: "film", icon: filmGreen, pro: false, flashTone: "warm",
+    likes: { warmth: 0.6, sat: 0.4 },
+    preset: p({ exposure: 0.0, contrast: 0.97, saturation: 0.86, temperature: 0.42, tint: 0.06, fade: 0.2, grain: 0.11, grainSize: 1.3, vignette: 0.22,
+      shadows: [0.025, 0.012, -0.02], highlights: [0.035, 0.02, -0.03],
+      hsl: [{ hue: 205, width: 60, sat: 0.35, shift: -10 }, { hue: 115, width: 50, sat: 0.65, shift: -40 }, { hue: 30, width: 35, sat: 1.08, lum: -0.02 }] }),
   },
   {
     id: "portra160", name: "Portra 160", tagline: "奶油肤色 · 柔和低反差", category: "film", icon: filmPortra, pro: true, flashTone: "warm",
@@ -127,9 +138,12 @@ export const CAMERAS: Camera[] = [
     preset: p({ contrast: 1.32, mono: true, fade: 0.06, grain: 0.15, vignette: 0.38, highlights: [0.02, 0.01, 0.0] }),
   },
   {
-    id: "cpm35", name: "CPM35", tagline: "一次性相机 · 暖金日期戳", category: "film", icon: filmDisposable, pro: false, flashTone: "warm",
-    likes: { lum: 0.32, sat: 0.5 },
-    preset: p({ exposure: 0.2, contrast: 1.2, saturation: 1.22, temperature: 0.3, tint: 0.1, grain: 0.12, vignette: 0.45, shadows: [0.0, 0.03, 0.03], highlights: [0.06, 0.04, -0.02], dateStamp: true }),
+    // 参考：海边单车、长椅草地两组 —— 阳光下的高反差胶片：黑位深、颜色浓但自然、天空偏青
+    id: "cpm35", name: "CPM35", tagline: "高反差胶片 · 暖金日期戳", category: "film", icon: filmDisposable, pro: false, flashTone: "warm",
+    likes: { lum: 0.55, sat: 0.55 },
+    preset: p({ exposure: 0.06, contrast: 1.18, saturation: 1.1, temperature: 0.18, tint: 0.04, fade: 0.03, grain: 0.07, vignette: 0.12,
+      shadows: [-0.005, 0.01, 0.015], highlights: [0.025, 0.02, 0.0],
+      hsl: [{ hue: 210, width: 45, sat: 1.12, shift: -8 }, { hue: 100, width: 50, sat: 0.95, shift: -8 }], dateStamp: true }),
   },
   // CCD —— 千禧数码卡片机
   {
@@ -138,14 +152,21 @@ export const CAMERAS: Camera[] = [
     preset: p({ exposure: 0.2, contrast: 1.12, saturation: 0.92, temperature: -0.45, tint: -0.08, fade: 0.04, grain: 0.03, vignette: 0.1, shadows: [-0.02, 0.0, 0.05], highlights: [0.03, 0.04, 0.08] }),
   },
   {
-    id: "cybert", name: "Cyber T", tagline: "索尼蓝调 · 高饱和", category: "ccd", icon: ccdCyber, pro: false, flashTone: "cool",
-    likes: { sat: 0.7, contrast: 0.6 },
-    preset: p({ contrast: 1.22, saturation: 1.35, temperature: -0.2, tint: -0.12, grain: 0.03, vignette: 0.12, shadows: [0.0, 0.0, 0.07], highlights: [0.0, 0.02, 0.04] }),
+    // 参考：铁道口、便利店两组 —— 暗部打开、天空冷青、灯光和高光偏暖、局部对比清晰
+    id: "cybert", name: "Cyber T", tagline: "质感通透 · 冷暖分离", category: "ccd", icon: ccdCyber, pro: false, flashTone: "cool",
+    likes: { contrast: 0.7, lum: 0.45 },
+    preset: p({ exposure: 0.1, contrast: 1.04, saturation: 0.98, temperature: 0.05, tint: 0, fade: 0.08, grain: 0.03, vignette: 0.1, clarity: 0.4,
+      shadows: [-0.02, 0.005, 0.025], highlights: [0.035, 0.02, -0.015],
+      hsl: [{ hue: 30, width: 35, sat: 1.15 }, { hue: 210, width: 50, sat: 0.95, shift: -12 }, { hue: 110, width: 45, sat: 0.8 }] }),
   },
   {
-    id: "dvnight", name: "DV 2003", tagline: "千禧夜视 · 绿调噪点", category: "ccd", icon: ccdDv, pro: true, flashTone: "cool",
-    likes: { lum: 0.25 },
-    preset: p({ exposure: 0.45, contrast: 1.15, saturation: 0.75, temperature: -0.2, tint: 0.45, fade: 0.08, grain: 0.18, vignette: 0.4, shadows: [-0.02, 0.06, 0.02], highlights: [0.0, 0.05, 0.0] }),
+    // 参考：海湾沙滩、仰拍大树两组 —— 高光发出暖金色光晕、颜色浓、青蓝通透，像油画
+    id: "glowdv", name: "Glow DV", tagline: "炫光油画 · 暖金发光", category: "ccd", icon: ccdDv, pro: true, flashTone: "warm",
+    likes: { lum: 0.6, green: 0.5 },
+    preset: p({ exposure: 0.1, contrast: 1.04, saturation: 1.12, temperature: 0.28, tint: 0.02, fade: 0.05, grain: 0.03, vignette: 0.12,
+      shadows: [0.0, 0.01, 0.02], highlights: [0.04, 0.025, -0.01],
+      hsl: [{ hue: 50, width: 40, sat: 1.2 }, { hue: 190, width: 45, sat: 1.12, shift: -6 }, { hue: 100, width: 40, sat: 1.1, shift: -10 }],
+      bloom: { amount: 0.55, threshold: 0.55, radius: 0.035, tint: [1.0, 0.86, 0.62] } }),
   },
   {
     id: "pinkccd", name: "粉调 CCD", tagline: "元气粉 · 少女感", category: "ccd", icon: ccdCandy, pro: false, flashTone: "cool",
@@ -169,9 +190,12 @@ export const CAMERAS: Camera[] = [
     preset: p({ exposure: 0.18, contrast: 1.0, saturation: 1.05, temperature: -0.12, tint: -0.04, fade: 0.1, grain: 0.03, vignette: 0.1, shadows: [0.0, 0.01, 0.04], highlights: [0.02, 0.03, 0.04], frame: { kind: "mini", color: "#f7f6f2" } }),
   },
   {
-    id: "wide300", name: "Wide 300", tagline: "宽幅相纸 · 温润低饱和", category: "instant", icon: instantWide, pro: false, flashTone: "soft",
-    likes: { green: 0.5, contrast: 0.5 },
-    preset: p({ exposure: 0.05, contrast: 1.05, saturation: 0.9, temperature: 0.15, tint: 0.08, fade: 0.14, grain: 0.04, vignette: 0.18, shadows: [0.0, 0.02, 0.0], highlights: [0.04, 0.03, 0.0], frame: { kind: "wide", color: "#f6f5f1" } }),
+    // 参考：茶卡盐湖两组 —— 明亮、空气感、低饱和粉彩，橙色仍然跳，颗粒明显
+    id: "wide300", name: "Wide 300", tagline: "宽幅相纸 · 明媚低饱和", category: "instant", icon: instantWide, pro: false, flashTone: "soft",
+    likes: { lum: 0.65, sat: 0.35 },
+    preset: p({ exposure: 0.28, contrast: 0.9, saturation: 0.8, temperature: 0.1, tint: -0.03, fade: 0.16, grain: 0.09, grainSize: 1.2, vignette: 0.05,
+      shadows: [-0.01, 0.01, 0.025], highlights: [0.03, 0.02, 0.0],
+      hsl: [{ hue: 20, width: 30, sat: 1.25 }, { hue: 200, width: 50, sat: 0.85, lum: 0.02 }], frame: { kind: "wide", color: "#f6f5f1" } }),
   },
   {
     id: "dusk", name: "Dusk 70", tagline: "落日漏光 · 黑边相纸", category: "instant", icon: instantDusk, pro: true, flashTone: "warm",
