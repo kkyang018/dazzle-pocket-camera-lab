@@ -4,7 +4,7 @@ import { FRAMES } from "@/lib/render";
 import { grain, noShadow, rng, softShadow, type Ctx, type Img } from "@/lib/templates/draw";
 import { crayon, spline, type LineStyle, type Pt } from "./crayon";
 import { MOTIFS, accentStrokes, type Stroke } from "./motifs";
-import { inkColor, livelyPalette, lum, rgbToHsl, standOut, tintedPaper, toHex, toRgb, type Tone } from "./plan";
+import { lum, rgbToHsl, schemePalette, standOut, tintedPaper, toHex, toRgb, type Tone } from "./plan";
 import type { Anchor, MotifSize, Outline, SoloData } from "./types";
 
 export type PhotoRect = { px: number; py: number; pw: number; ph: number };
@@ -252,9 +252,10 @@ export function drawSoloCard(ctx: Ctx, W: number, H: number, img: Img, data: Sol
   const tone = photoTone(photo, !!data?.outline);
   // 纸张颜色跟照片色调走：浅色亮、深色暗；照片越鲜艳纸越素
   // AI（或本地规则）选的线条色里，第一种有颜色、又不是暖橙的色相，用来区分暖色照片
-  const aiHue = (plan?.colors ?? []).map((c) => rgbToHsl(toRgb(c) ?? [128, 128, 128]))
-    .find(([h, s]) => s > 0.25 && !(h >= 5 && h < 55))?.[0] ?? null;
-  const paper = tintedPaper(tone, look.dark, aiHue);
+  // 配色：AI 给的第一种颜色定基调色相（没有就用照片主色），再按"换一组"轮换情绪和色相搭配
+  const aiHsl = plan?.colors.map((c) => rgbToHsl(toRgb(c) ?? [128, 128, 128])).find(([, s]) => s > 0.2);
+  const scheme = schemePalette(aiHsl?.[0] ?? tone.hue, seed, tone, look.dark);
+  const paper = plan ? scheme.paper : tintedPaper(tone, look.dark, null);
   ctx.fillStyle = paper;
   ctx.fillRect(0, 0, W, H);
 
@@ -276,11 +277,11 @@ export function drawSoloCard(ctx: Ctx, W: number, H: number, img: Img, data: Sol
   }
 
   const lw = 6 * u;
-  // 纸上的线条：柔和但有色彩，再和纸张拉开明度，保证看得清
-  const lively = livelyPalette(plan.colors.length ? plan.colors : ["#C9824F"]);
-  const colors = lively.map((c) => inkColor(c, paper));
+  // 纸上的线条：已按纸张调好明度
+  const colors = scheme.colors;
   // 画在照片上的描边和点缀：挑和照片主色相差最远的颜色（绿照片不用绿线）
-  const inPhoto = standOut(lively, tone);
+  const inPhoto = standOut(colors, tone);
+  const inPhoto2 = colors.find((c) => c !== inPhoto) ?? inPhoto;
   const rand = rng(seed * 7919 + 17);
   const flip = seed % 2 === 0; // "换一组"时左右镜像，再加上随机抖动
 
@@ -317,39 +318,48 @@ export function drawSoloCard(ctx: Ctx, W: number, H: number, img: Img, data: Sol
   // 长线分散到不同的角：先对角，再补另外两个角
   const startCorner = Math.floor(rand() * 4);
   const corners = [0, 2, 1, 3].map((d) => (startCorner + d) % 4);
-  // 只放一条 L 形环绕（corners[0]），长线放在对角和另外两个角
-  // 至少 3 条：一条 L 形环绕 + 一条虚线 + 一条点线
-  const flows = Math.max(3, plan.flows);
-  for (let k = 0; k < flows; k++) {
-    const color = colors[(k + 1) % colors.length]!;
-    if (k === 0) {
-      // 角上环绕：L 形线 + 小波浪
-      const { arm, squiggle } = cornerWrap(rect, corners[0]!, rand, band);
-      crayon(ctx, arm, color, lw * 0.95, seed * 211 + k, "solid");
-      crayon(ctx, squiggle, colors[(k + 2) % colors.length]!, lw * 0.85, seed * 223 + k, "solid", { wobble: 0.3 });
-    } else {
-      // 其余长线固定包含一条虚线、一条点线（顺序随"换一组"变），第三条起实线
-      const style: LineStyle = k <= 2 ? (((k + seed) % 2 ? "dash" : "dot") as LineStyle) : styles[(k + seed) % 3]!;
-      crayon(ctx, flowLine(rect, corners[k % 4]!, rand, band), color, lw * 0.85, seed * 211 + k, style);
-    }
-  }
+  // 四个角各放一样，互不重叠：L 形环绕（corners[0]）、对角放一条长线、另两个角放长线和小波浪
+  void styles;
+  const lStyle = cornerWrap(rect, corners[0]!, rand, band);
+  crayon(ctx, lStyle.arm, colors[1 % colors.length]!, lw * 0.95, seed * 211, "solid");
+  const firstDash = seed % 2 === 0;
+  crayon(ctx, flowLine(rect, corners[1]!, rand, band), colors[2 % colors.length]!, lw * 0.85, seed * 212, firstDash ? "dash" : "dot");
+  crayon(ctx, flowLine(rect, corners[2]!, rand, band), colors[0]!, lw * 0.85, seed * 213, firstDash ? "dot" : "dash");
+  // 小波浪单独放在剩下的那个角
+  const wave = cornerWrap(rect, corners[3]!, rand, band).squiggle;
+  crayon(ctx, wave, colors[(seed + 1) % colors.length]!, lw * 0.85, seed * 223, "solid", { wobble: 0.3 });
 
   placed.forEach((p, k) => p.m.size !== "l" && drawMotif(p, k));
 
   // 主体描边：贴着人物、在照片边缘断开；再补一遍偏移的淡线，像手描了两次
+  // 描边样式随"换一组"轮换：① 实线 + 错开的淡线  ② 虚线 + 一条细实线  ③ 双色双线
   const outline = data?.outline;
   const outlineColor = inPhoto;
+  const outlineStyle = (seed - 1) % 3;
+  /** 沿法线方向把整条线平移 d（像手描时稍微偏开） */
+  const offsetPath = (pts: Pt[], d: number): Pt[] => pts.map(([x, y], j) => {
+    const [ax, ay] = pts[Math.max(0, j - 1)]!, [bx, by] = pts[Math.min(pts.length - 1, j + 1)]!;
+    const L = Math.hypot(bx - ax, by - ay) || 1;
+    return [x - ((by - ay) / L) * d, y + ((bx - ax) / L) * d];
+  });
   if (outline) {
     outline.paths.forEach((path, i) => {
       const pts = path.map(([x, y]) => [px + x * pw, py + y * ph] as Pt);
-      crayon(ctx, pts, outlineColor, lw * (i ? 1 : 1.2), seed * 401 + i, "solid", { wobble: 0.7 });
-      // 第二遍：只描中间一段，略微错开、更细更淡
-      const a = Math.floor(pts.length * (0.15 + rand() * 0.15)), b = Math.floor(pts.length * (0.55 + rand() * 0.3));
-      const second = pts.slice(a, b).map(([x, y]) => [x + lw * 0.9, y - lw * 0.6] as Pt);
-      ctx.save();
-      ctx.globalAlpha = 0.45;
-      crayon(ctx, second, outlineColor, lw * 0.55, seed * 409 + i, "solid", { wobble: 1.2 });
-      ctx.restore();
+      if (outlineStyle === 0) {
+        crayon(ctx, pts, outlineColor, lw * (i ? 1 : 1.2), seed * 401 + i, "solid", { wobble: 0.7 });
+        // 第二遍：只描中间一段，略微错开、更细更淡
+        const a = Math.floor(pts.length * (0.15 + rand() * 0.15)), b = Math.floor(pts.length * (0.55 + rand() * 0.3));
+        ctx.save();
+        ctx.globalAlpha = 0.45;
+        crayon(ctx, offsetPath(pts.slice(a, b), lw * 1.1), outlineColor, lw * 0.55, seed * 409 + i, "solid", { wobble: 1.2 });
+        ctx.restore();
+      } else if (outlineStyle === 1) {
+        crayon(ctx, pts, outlineColor, lw * 1.15, seed * 401 + i, "dash", { wobble: 0.6 });
+        crayon(ctx, offsetPath(pts, lw * 1.6), inPhoto2, lw * 0.5, seed * 411 + i, "solid", { wobble: 0.9 });
+      } else {
+        crayon(ctx, pts, outlineColor, lw * 0.85, seed * 401 + i, "solid", { wobble: 0.5 });
+        crayon(ctx, offsetPath(pts, lw * 1.5), inPhoto2, lw * 0.75, seed * 413 + i, "solid", { wobble: 0.8 });
+      }
     });
   }
 

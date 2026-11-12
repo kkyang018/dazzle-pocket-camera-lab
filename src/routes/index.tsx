@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ImagePlus, Loader2 } from "lucide-react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Aperture, ImagePlus, Images, Loader2 } from "lucide-react";
 import { useApp } from "@/lib/app-state";
 import { photoFromFile, photoFromSample } from "@/lib/photo";
 import { cn } from "@/lib/utils";
@@ -53,26 +53,33 @@ function LabPage() {
   return (
     <main className="bg-vignette flex min-h-[calc(100dvh-5rem)] flex-col px-5 pt-[max(env(safe-area-inset-top),1.25rem)]">
       <header className="animate-rise">
-        <div className="flex items-center justify-between font-mono text-[10px] tracking-[0.18em] text-muted-foreground uppercase">
+        <div className="flex items-center font-mono text-[10px] tracking-[0.18em] text-muted-foreground uppercase">
           <span className="flex items-center gap-1.5">
             <span className="animate-blink size-1.5 rounded-full bg-primary" aria-hidden />
             Darkroom
           </span>
-          <Link to="/album" className="rounded-full border border-hairline px-2.5 py-1 text-foreground">印样台 ›</Link>
         </div>
         <h1 className="mt-6 font-serif text-[40px] leading-none font-black tracking-tight">Dazz Lab</h1>
         <p className="mt-3 text-sm text-muted-foreground">选一张照片，再挑一台相机冲洗它。</p>
         {showGuide && (
-          <ol aria-label="怎么用" className="relative mt-4 grid grid-cols-3 gap-1.5 rounded-2xl border border-hairline bg-surface/60 p-2.5 pr-7">
-            {[["01", "选照片"], ["02", "挑相机 · 进暗房显影"], ["03", "收进印样台 · 做成品"]].map(([n, t]) => (
-              <li key={n} className="flex flex-col gap-0.5">
-                <span className="font-mono text-[9px] text-primary">{n}</span>
-                <span className="text-[11px] leading-snug text-foreground/85">{t}</span>
-              </li>
-            ))}
+          <div className="guide-card relative mt-4 rounded-2xl border border-hairline bg-surface/60 px-3 pt-3 pb-2.5">
+            {/* 三步之间的连线，一颗光点沿线走，走到哪一步哪一步亮 */}
+            <div aria-hidden className="pointer-events-none absolute top-[26px] right-[17%] left-[17%] h-px bg-hairline">
+              <span className="guide-dot absolute top-1/2 left-0 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary shadow-[0_0_8px_2px_var(--primary)]" />
+            </div>
+            <ol aria-label="怎么用" className="relative grid grid-cols-3">
+              {([[ImagePlus, "选照片"], [Aperture, "挑相机显影"], [Images, "印样台做成品"]] as const).map(([Icon, t], i) => (
+                <li key={t} className="guide-in flex flex-col items-center gap-1.5" style={{ animationDelay: `${0.15 + i * 0.22}s` }}>
+                  <span className="guide-step grid size-7 place-items-center rounded-full border border-hairline bg-background" style={{ animationDelay: `${0.95 + i * 1.8}s` }}>
+                    <Icon className="size-3.5" strokeWidth={1.8} />
+                  </span>
+                  <span className="text-[11px] whitespace-nowrap text-foreground/85">{t}</span>
+                </li>
+              ))}
+            </ol>
             <button type="button" onClick={() => setGuideClosed(true)} aria-label="关闭引导"
-              className="absolute top-1.5 right-2 text-[13px] leading-none text-muted-foreground">×</button>
-          </ol>
+              className="absolute top-1.5 right-2.5 text-[13px] leading-none text-muted-foreground">×</button>
+          </div>
         )}
       </header>
 

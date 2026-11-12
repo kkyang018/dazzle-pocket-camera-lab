@@ -115,9 +115,18 @@ export function backgroundScore(img: Img) {
   return (sat / n) * 1.0 + (1 - Math.abs(mean - 0.55) * 2) * 0.5 + Math.min(std, 0.3) * 1.2;
 }
 
-export function pickBackground(imgs: Img[]) {
-  let best = 0, score = -Infinity;
-  imgs.forEach((im, i) => { const s = backgroundScore(im); if (s > score) { score = s; best = i; } });
+/**
+ * 挑背景：优先没有人的照片（其中选颜色层次最好的）；全都有人时，选人最小的那张。
+ * @param people 每张照片里人脸占画面的面积比例；null/0 = 没有人，undefined = 还不知道
+ */
+export function pickBackground(imgs: Img[], people?: (number | null | undefined)[]) {
+  const known = people && imgs.every((_, i) => people[i] !== undefined);
+  const noPeople = known ? imgs.map((_, i) => i).filter((i) => !people![i]) : imgs.map((_, i) => i);
+  if (known && noPeople.length === 0) {
+    return imgs.reduce((best, _, i) => ((people![i] ?? 0) < (people![best] ?? 0) ? i : best), 0);
+  }
+  let best = noPeople[0] ?? 0, score = -Infinity;
+  noPeople.forEach((i) => { const s = backgroundScore(imgs[i]!); if (s > score) { score = s; best = i; } });
   return best;
 }
 
@@ -175,6 +184,8 @@ export type CollageInput = {
   focus: ([number, number] | null)[];
   /** 用哪一张做背景（null = 自动挑） */
   background: number | null;
+  /** 每张照片里人有多大（人脸面积比例），自动挑背景时避开有人的 */
+  people?: (number | null | undefined)[];
 };
 
 /** 每个槽位最终用的取景 */
@@ -184,7 +195,7 @@ export function slotCrop(input: CollageInput, img: Img, r: Rect, i: number): Cro
 
 export function drawCollage(ctx: Ctx, W: number, H: number, imgs: Img[], input: CollageInput) {
   const n = n4(imgs.length);
-  const bg = input.background ?? pickBackground(imgs.slice(0, n));
+  const bg = input.background ?? pickBackground(imgs.slice(0, n), input.people?.slice(0, n));
   drawCollageBackground(ctx, W, H, imgs[bg] ?? imgs[0]!);
   const rects = collageRects(W, H, n);
   imgs.slice(0, n).forEach((img, i) => drawCropped(ctx, img, rects[i]!, slotCrop(input, img, rects[i]!, i)));

@@ -101,15 +101,49 @@ export function paperColor(hex: string): string {
   return toHex(c);
 }
 
-/** 线条颜色：和底色拉开明度差，避免糊在纸上；同时避开纯黑纯白 */
+/**
+ * 线条颜色：和底色拉开明度差，避免糊在纸上。
+ * 只调明度、保留色相和饱和度（以前是往棕色里混，所以总带棕黄）。
+ */
 export function inkColor(hex: string, paper: string): string {
   const p = toRgb(paper) ?? CREAM;
-  let c = toRgb(hex) ?? [201, 130, 79];
-  if (lum(c) < 0.18) c = mix(c, [200, 120, 100], 0.4);
-  for (let i = 0; i < 10 && Math.abs(lum(c) - lum(p)) < 0.16; i++) {
-    c = lum(p) > 0.5 ? mix(c, [60, 40, 30], 0.15) : mix(c, [255, 250, 240], 0.15);
-  }
-  return toHex(c);
+  const c = toRgb(hex) ?? [201, 130, 79];
+  const [h, s] = rgbToHsl(c);
+  let l = rgbToHsl(c)[2];
+  if (l < 0.22) l = 0.3;
+  const darkPaper = lum(p) < 0.5;
+  for (let i = 0; i < 12 && Math.abs(lum(hslToRgb(h, s, l)) - lum(p)) < 0.16; i++) l += darkPaper ? 0.05 : -0.05;
+  return toHex(hslToRgb(h, s, Math.min(0.9, Math.max(0.2, l))));
+}
+
+/** 配色情绪：莫兰迪（柔和灰调）、高饱和、粉彩、深色 */
+export const MOODS = ["morandi", "vivid", "pastel", "deep"] as const;
+export type Mood = (typeof MOODS)[number];
+/** 色相搭配：邻近、互补、三角、分裂互补 */
+const HARMONIES: number[][] = [[0, 32, -28], [0, 180, 155], [0, 120, 240], [0, 150, 210]];
+
+/**
+ * 按"情绪 + 色相搭配"出一套线条色和纸张色，"换一组"（seed）会换到下一种组合。
+ * 起始情绪看照片：照片鲜艳 → 先给莫兰迪；照片灰 → 先给高饱和。
+ */
+export function schemePalette(baseHue: number, seed: number, tone: Tone, dark: boolean): { mood: Mood; colors: string[]; paper: string } {
+  const start = tone.sat > 0.28 ? 0 : 1;
+  const mood = MOODS[(start + seed - 1) % MOODS.length]!;
+  const harmony = HARMONIES[Math.floor((seed - 1) / MOODS.length + seed) % HARMONIES.length]!;
+  const hue0 = (baseHue + (seed - 1) * 23 + 360) % 360;
+  const spec: [number, number] = ({ morandi: [0.24, 0.6], vivid: [0.78, 0.55], pastel: [0.55, 0.72], deep: [0.6, 0.38] } as const)[mood] as [number, number];
+  const colors = harmony.map((off, i) => {
+    const h = (hue0 + off + 360) % 360;
+    let s = spec[0] * (i === 2 ? 0.85 : 1), l = spec[1] + (i - 1) * 0.04;
+    // 橙黄一带明度低了就像棕色：抬亮、提饱和，让它是橙 / 芥末黄而不是棕
+    if (h >= 18 && h <= 48 && mood !== "morandi") { l = Math.max(l, 0.6); s = Math.max(s, 0.6); }
+    return toHex(hslToRgb(h, s, l));
+  });
+  // 纸张：莫兰迪 / 粉彩跟线条同色系，高饱和 / 深色用照片色调（鲜艳的线配安静的纸）
+  const pHue = mood === "morandi" || mood === "pastel" ? (hue0 + 180) % 360 : paperHue(tone, hue0);
+  const ps = mood === "pastel" ? 0.4 : mood === "morandi" ? 0.14 : Math.min(0.45, Math.max(0.12, 0.55 - tone.sat * 0.9));
+  const paper = toHex(dark ? hslToRgb(pHue, ps * 0.8, 0.15) : hslToRgb(pHue, ps, 0.89));
+  return { mood, colors: colors.map((c) => inkColor(c, paper)), paper };
 }
 
 /** 浅底上的浅色线（比如绿底上的奶白叶子）也允许，但要和底色有一点区别 */

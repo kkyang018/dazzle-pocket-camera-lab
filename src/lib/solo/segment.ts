@@ -32,6 +32,11 @@ async function create() {
 
 /** 照片主体位置（最大那张脸的中心，0–1）；没有脸或模型加载失败时返回 null */
 export async function faceCenter(img: HTMLCanvasElement): Promise<[number, number] | null> {
+  return (await faceInfo(img))?.center ?? null;
+}
+
+/** 人脸信息：最大那张脸的中心 + 所有人脸占画面的面积比例（看"人有多大"）；没有脸返回 null */
+export async function faceInfo(img: HTMLCanvasElement): Promise<{ center: [number, number]; area: number } | null> {
   try {
     const { face } = await (tasks ??= create());
     const k = Math.min(1, 512 / Math.max(img.width, img.height));
@@ -42,9 +47,10 @@ export async function faceCenter(img: HTMLCanvasElement): Promise<[number, numbe
     const boxes = face.detect(c).detections.flatMap((d) => (d.boundingBox ? [d.boundingBox] : []));
     if (!boxes.length) return null;
     const b = boxes.reduce((a, x) => (x.width * x.height > a.width * a.height ? x : a));
-    return [(b.originX + b.width / 2) / c.width, (b.originY + b.height / 2) / c.height];
+    const area = boxes.reduce((s, x) => s + x.width * x.height, 0) / (c.width * c.height);
+    return { center: [(b.originX + b.width / 2) / c.width, (b.originY + b.height / 2) / c.height], area };
   } catch (e) {
-    console.warn("faceCenter", e);
+    console.warn("faceInfo", e);
     tasks = null;
     return null;
   }

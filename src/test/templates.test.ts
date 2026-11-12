@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TEMPLATES, blockReason, defaultOptions, getTemplate, recommendTemplate, stampText, usable } from "@/lib/templates";
-import { COLLAGE_LAYOUTS, clampCrop, collageRects, initialCrop } from "@/lib/collage";
+import { COLLAGE_LAYOUTS, clampCrop, collageRects, initialCrop, pickBackground } from "@/lib/collage";
 
 describe("成品模板规则", () => {
   it("保留 4 款模板，拼图替换了拼图贴纸", () => expect(TEMPLATES.map((t) => t.id)).toEqual(["solo", "halfframe", "polaroid", "collage"]));
@@ -87,6 +87,11 @@ describe("拼图版式", () => {
       close(top, H - bottom);
     }
     expect(COLLAGE_LAYOUTS[4].cols).toBe(2);
+  });
+
+  it("背景：全都有人时选人最小的那张", () => {
+    const imgs = [{}, {}, {}] as unknown as HTMLCanvasElement[];
+    expect(pickBackground(imgs, [0.2, 0.05, 0.3])).toBe(1);
   });
 
   it("缩放不能小于刚好铺满（1），取景位置夹在 0–1", () => {

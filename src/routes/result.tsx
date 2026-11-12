@@ -4,7 +4,7 @@ import { soloPlan } from "@/lib/ai/vision.functions";
 import { analyzeScene } from "@/lib/scene";
 import { averageColor, cropInner } from "@/lib/solo/draw";
 import { localPlan } from "@/lib/solo/plan";
-import { faceCenter, personOutline } from "@/lib/solo/segment";
+import { faceInfo, personOutline } from "@/lib/solo/segment";
 import type { SoloData } from "@/lib/solo/types";
 import { MAX_ZOOM, clampCrop, collageRects, coverGeometry, slotCrop, type Crop } from "@/lib/collage";
 import { ChevronLeft, Loader2, Shuffle } from "lucide-react";
@@ -73,7 +73,7 @@ function ResultPage() {
   const [solo, setSolo] = useState<Record<string, SoloData>>({});
   const [soloBusy, setSoloBusy] = useState<Record<string, boolean>>({});
   // 拼图：每组照片的主体位置（人脸），用于初始取景
-  const [focus, setFocus] = useState<Record<string, ([number, number] | null)[]>>({});
+  const [focus, setFocus] = useState<Record<string, ({ center: [number, number]; area: number } | null)[]>>({});
   const [selSlot, setSelSlot] = useState<number | null>(null);
   const callSolo = useServerFn(soloPlan);
   const t = getTemplate(tid);
@@ -127,7 +127,7 @@ function ResultPage() {
   useEffect(() => {
     if (!imgs || tid !== "collage" || focus[ids]) return;
     let alive = true;
-    void Promise.all(imgs.map((im) => faceCenter(im))).then((f) => alive && setFocus((m) => ({ ...m, [ids]: f })));
+    void Promise.all(imgs.map((im) => faceInfo(im))).then((f) => alive && setFocus((m) => ({ ...m, [ids]: f })));
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [imgs, tid, ids]);
@@ -138,7 +138,9 @@ function ResultPage() {
     ...opts,
     solo: sState ?? null,
     soloFrame,
-    cfocus: focus[ids] ?? [null, null, null, null],
+    cfocus: focus[ids]?.map((f) => f?.center ?? null) ?? [null, null, null, null],
+    // 还没识别完时是 []，先按颜色挑背景；识别完再按"有没有人、人多大"重新挑
+    cpeople: focus[ids]?.map((f) => f?.area ?? null) ?? [],
   }), [opts, sState, soloFrame, focus, ids]);
   const fullRef = useRef(full);
   fullRef.current = full;

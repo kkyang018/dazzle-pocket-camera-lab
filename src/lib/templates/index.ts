@@ -32,6 +32,8 @@ export type TemplateOptions = {
   ccrops: (Crop | null)[];
   /** 拼图：每张照片的主体位置（0–1），用于初始取景 */
   cfocus: ([number, number] | null)[];
+  /** 拼图：每张照片里人脸占画面的比例（null = 没人，undefined = 还在识别），挑背景时避开有人的 */
+  cpeople: (number | null | undefined)[];
 };
 
 export type TemplateDef = {
@@ -143,7 +145,7 @@ function drawPolaroid(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOp
 
 // ── ④ 拼图（无贴纸）：双图 / 三图竖排、四宫格；版式与背景见 src/lib/collage ─────
 function drawCollageTemplate(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOptions) {
-  drawCollage(ctx, W, H, imgs, { crops: o.ccrops, focus: o.cfocus, background: null });
+  drawCollage(ctx, W, H, imgs, { crops: o.ccrops, focus: o.cfocus, background: null, people: o.cpeople });
 }
 
 export const TEMPLATES: TemplateDef[] = [
@@ -186,6 +188,6 @@ export function defaultOptions(place: string | null = null): TemplateOptions {
   return {
     caption: place ?? "", date, frame: 0, format: "mini", crops: [0.5, 0.5], swap: false, seed: 1,
     solo: null, soloDark: false, soloFrame: null,
-    ccrops: [null, null, null, null], cfocus: [null, null, null, null],
+    ccrops: [null, null, null, null], cfocus: [null, null, null, null], cpeople: [],
   };
 }

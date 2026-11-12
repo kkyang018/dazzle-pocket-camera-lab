@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { maskToOutline } from "@/lib/solo/outline";
+import { schemePalette } from "@/lib/solo/plan";
 import { inkColor, localPlan, paperColor, paperHue, rgbToHsl, sanitizePlan, standOut, tintedPaper, toRgb, lum } from "@/lib/solo/plan";
 
 /** 画一个"人"：圆头 + 下半身一直延伸到画面底边（被裁到） */
@@ -77,6 +78,25 @@ describe("跟着照片走的纸张和描边", () => {
   it("绿色照片上的描边不用绿色", () => {
     const c = standOut(["#6f9a4f", "#d2603a", "#e0a93a"], { hue: 110, sat: 0.4, lum: 0.45 });
     expect(c).not.toBe("#6f9a4f");
+  });
+});
+
+describe("配色更多样、不再发棕", () => {
+  const tone = { hue: 100, sat: 0.3, lum: 0.5 };
+  it("线条色调明度时保留色相（蓝线不会变成棕色）", () => {
+    const [h] = rgbToHsl(toRgb(inkColor("#9fc3e8", "#f5efe4"))!);
+    expect(Math.abs(h - rgbToHsl(toRgb("#9fc3e8")!)[0])).toBeLessThan(6);
+  });
+  it("换一组会换配色情绪，4 次里莫兰迪、高饱和、粉彩、深色都出现", () => {
+    const moods = new Set([1, 2, 3, 4].map((s) => schemePalette(200, s, tone, false).mood));
+    expect(moods.size).toBe(4);
+  });
+  it("每套至少 3 种颜色，纸张都是浅色", () => {
+    for (const s of [1, 2, 3, 4, 5]) {
+      const p = schemePalette(30, s, tone, false);
+      expect(p.colors.length).toBe(3);
+      expect(lum(toRgb(p.paper)!)).toBeGreaterThan(0.7);
+    }
   });
 });
 
