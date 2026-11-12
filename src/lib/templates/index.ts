@@ -1,6 +1,7 @@
 import type { CameraCategory } from "@/lib/cameras";
 import { FONTS, cover, grain, rng, type Ctx, type Img } from "./draw";
-import { drawSoloCard, type FrameKind } from "@/lib/solo/draw";
+import { drawSoloCard, innerRect, type FrameKind } from "@/lib/solo/draw";
+import { FRAMES } from "@/lib/render";
 import type { SoloData } from "@/lib/solo/types";
 import { COLLAGE_CANVAS, drawCollage, type Crop } from "@/lib/collage";
 
@@ -62,44 +63,60 @@ function drawSolo(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOption
   drawSoloCard(ctx, W, H, imgs[0]!, o.solo, o.seed, { dark: o.soloDark, frame: o.soloFrame });
 }
 
-// ── ② 半格胶片：两张竖裁并排、满版、黑分隔条、轻颗粒偏暖 ───────────
+// ── ② 半格胶片：两张竖裁并排、满版、片基色分隔条（窄、不纯黑、边缘不齐）、轻颗粒偏暖 ───
+const HALF_BASE = "#2a2420"; // 片基色：深棕灰，不是纯黑
 function drawHalf(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOptions) {
-  const gap = W * 0.045;
-  ctx.fillStyle = "#0a0a09";
+  const gap = W * 0.03;
+  ctx.fillStyle = HALF_BASE;
   ctx.fillRect(0, 0, W, H);
   const fw = (W - gap) / 2;
   const pair = o.swap ? [imgs[1]!, imgs[0]!] : [imgs[0]!, imgs[1]!];
   const crops = o.swap ? [o.crops[1], o.crops[0]] : o.crops;
-  pair.forEach((img, i) => cover(ctx, img, i * (fw + gap), 0, fw, H, crops[i]));
+  // 照片各往中间多画一点，分隔条压上去后边缘才有起伏
+  pair.forEach((img, i) => cover(ctx, img, i === 0 ? 0 : fw + gap - gap * 0.3, 0, fw + gap * 0.3, H, crops[i]));
   ctx.save();
   ctx.globalCompositeOperation = "soft-light";
   ctx.fillStyle = "rgba(255,170,90,0.22)";
   ctx.fillRect(0, 0, W, H);
   ctx.restore();
-  ctx.fillStyle = "#0a0a09";
-  ctx.fillRect(fw, 0, gap, H);
+  // 分隔条：两条边沿高度方向轻微起伏（像真实片基的曝光边缘），边缘一点点渗光
+  const r = rng(17);
+  const steps = 90, amp = gap * 0.09;
+  const edge = (side: number) => Array.from({ length: steps + 1 }, (_, k) => {
+    const y = (k / steps) * H;
+    const wob = Math.sin(k * 0.18 + side * 2) * amp * 0.6 + (r() - 0.5) * amp;
+    return [fw + side * gap + wob, y] as [number, number];
+  });
+  const left = edge(0), right = edge(1);
+  ctx.save();
+  ctx.beginPath();
+  left.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+  [...right].reverse().forEach(([x, y]) => ctx.lineTo(x, y));
+  ctx.closePath();
+  ctx.shadowColor = "rgba(42,36,32,0.55)";
+  ctx.shadowBlur = gap * 0.35;
+  ctx.fillStyle = HALF_BASE;
+  ctx.fill();
+  ctx.restore();
   grain(ctx, W, H, 0.2);
 }
 
-// ── ③ 拍立得：干净相纸，底边居中日期章 + 地点 ──────────────────────
-const POLAROID: Record<PolaroidFormat, { card: [number, number]; img: [number, number, number, number] }> = {
-  // card 尺寸；照片 x,y,w,h（真实相纸比例放大）
-  mini: { card: [1080, 1720], img: [80, 100, 920, 1240] },
-  square: { card: [1080, 1290], img: [75, 90, 930, 930] },
-  wide: { card: [1620, 1290], img: [67, 90, 1486, 930] },
-};
+// ── ③ 拍立得：直接用暗房冲出来的整张相纸（压纹、圆角、相纸颜色都保留），只在底边盖日期章 + 地点章 ──
+/** 整张相纸的宽高比（和暗房 render 里的相纸边距一致） */
+function polaroidCard(kind: PolaroidFormat): [number, number] {
+  const f = FRAMES[kind];
+  const ratio = (1 + 2 * f.side) / (1 / f.aspect + f.top + f.bottom);
+  return [1080, Math.round(1080 / ratio)];
+}
 function drawPolaroid(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOptions) {
-  const spec = POLAROID[o.format];
-  const s = W / spec.card[0];
+  const card = imgs[0]!;
   const dark = o.frame === 1;
   ctx.fillStyle = dark ? "#151413" : "#f8f6f1";
   ctx.fillRect(0, 0, W, H);
-  const [x, y, w, h] = spec.img.map((v) => v * s) as [number, number, number, number];
-  cover(ctx, imgs[0]!, x, y, w, h);
-  ctx.strokeStyle = dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.08)";
-  ctx.lineWidth = 2 * s;
-  ctx.strokeRect(x, y, w, h);
-  const top = y + h, bottom = H - top;
+  ctx.drawImage(card, 0, 0, W, H);
+  const [, iy, , ih] = innerRect(card, o.format);
+  const s = W / 1080;
+  const top = (iy + ih) * H, bottom = H - top;
   const base = Math.min(bottom * 0.17, 54 * s);
   ctx.fillStyle = dark ? "#d8d3c8" : "#3a3836";
   ctx.textAlign = "center";
@@ -119,8 +136,9 @@ function drawPolaroid(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOp
   };
   const hasPlace = !!o.caption.trim();
   const mid = top + bottom * 0.5;
-  letter(stampText(o.date), hasPlace ? mid - base * 0.75 : mid, base);
-  if (hasPlace) letter(o.caption.trim().toUpperCase(), mid + base * 0.85, base * 0.82);
+  // 两个章靠近一点
+  letter(stampText(o.date), hasPlace ? mid - base * 0.55 : mid, base);
+  if (hasPlace) letter(o.caption.trim().toUpperCase(), mid + base * 0.62, base * 0.82);
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
 }
@@ -133,7 +151,7 @@ function drawCollageTemplate(ctx: Ctx, W: number, H: number, imgs: Img[], o: Tem
 export const TEMPLATES: TemplateDef[] = [
   { id: "solo", name: "手绘单张", en: "Hand-drawn", min: 1, max: 1, ai: true, size: () => [1080, 1440], draw: drawSolo },
   { id: "halfframe", name: "半格胶片", en: "Half-Frame", min: 2, max: 2, noInstant: true, size: () => [1500, 1040], draw: drawHalf },
-  { id: "polaroid", name: "拍立得", en: "Polaroid", min: 1, max: 1, instantOnly: true, size: (o) => POLAROID[o.format].card, draw: drawPolaroid },
+  { id: "polaroid", name: "拍立得", en: "Polaroid", min: 1, max: 1, instantOnly: true, size: (o) => polaroidCard(o.format), draw: drawPolaroid },
   { id: "collage", name: "拼图", en: "Collage", min: 2, max: 4, noInstant: true, size: () => [1080, Math.round((1080 * COLLAGE_CANVAS[1]) / COLLAGE_CANVAS[0])], draw: drawCollageTemplate },
 ];
 

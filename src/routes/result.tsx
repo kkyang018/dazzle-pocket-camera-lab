@@ -81,7 +81,8 @@ function ResultPage() {
   const ids = items.map((i) => i.id).join(",");
   // 拍立得照片做手绘单张：保留整张相纸（其他模板自己画相纸/版式，用去掉相纸的照片）
   const soloFrame = tid === "solo" && lead?.category === "instant" ? (lead.look?.frame?.kind ?? null) : null;
-  const bare = !soloFrame;
+  // 拍立得模板也直接用整张相纸，只在上面盖章
+  const bare = !soloFrame && tid !== "polaroid";
   const imgKey = `${ids}|${bare}`;
   // 只用和当前设置匹配的那批图（切换模板时旧图可能还在）
   const imgs = imgState?.key === imgKey ? imgState.list : null;

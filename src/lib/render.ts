@@ -85,15 +85,15 @@ export function renderWithPreset(src: HTMLCanvasElement, p: Preset, seed = 7) {
   let sx = 0, sy = 0, sw = src.width, sh = src.height;
   const frame = p.frame ? FRAMES[p.frame.kind] : null;
   if (frame) {
-    if (sw / sh > frame.aspect) {
-      const nw = Math.round(sh * frame.aspect);
-      sx = Math.round((sw - nw) * (p.cropX ?? 0.5));
-      sw = nw;
-    } else {
-      const nh = Math.round(sw / frame.aspect);
-      sy = Math.round((sh - nh) * (p.cropY ?? 0.5));
-      sh = nh;
-    }
+    // 先按相纸比例取最大的一块，再按缩放倍数取中间更小的一块（双指放大取景）
+    let cw = sw, ch = sh;
+    if (sw / sh > frame.aspect) cw = sh * frame.aspect;
+    else ch = sw / frame.aspect;
+    const z = Math.max(1, p.cropZoom ?? 1);
+    cw = Math.max(1, Math.round(cw / z)); ch = Math.max(1, Math.round(ch / z));
+    sx = Math.round((sw - cw) * (p.cropX ?? 0.5));
+    sy = Math.round((sh - ch) * (p.cropY ?? 0.5));
+    sw = cw; sh = ch;
   }
 
   const c = document.createElement("canvas");

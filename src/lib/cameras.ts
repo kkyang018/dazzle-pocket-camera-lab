@@ -65,6 +65,8 @@ export type Preset = {
   /** 画幅裁剪中心 0…1（默认居中） */
   cropX?: number;
   cropY?: number;
+  /** 拍立得取景放大倍数（≥1，默认 1） */
+  cropZoom?: number;
 };
 
 /** 照片画面特征，0…1 */
@@ -123,9 +125,9 @@ export const CAMERAS: Camera[] = [
     // 参考：雪林骑马、江边围巾两组 —— 整体棕琥珀、蓝绿退成橄榄、哑光抬黑、粗颗粒
     id: "brown400", name: "Brown 400", tagline: "复古棕调 · 电影质感", category: "film", icon: filmGreen, pro: false, flashTone: "warm",
     likes: { warmth: 0.6, sat: 0.4 },
-    preset: p({ exposure: 0.0, contrast: 0.97, saturation: 0.86, temperature: 0.42, tint: 0.06, fade: 0.2, grain: 0.11, grainSize: 1.3, vignette: 0.22,
-      shadows: [0.025, 0.012, -0.02], highlights: [0.035, 0.02, -0.03],
-      hsl: [{ hue: 205, width: 60, sat: 0.35, shift: -10 }, { hue: 115, width: 50, sat: 0.65, shift: -40 }, { hue: 30, width: 35, sat: 1.08, lum: -0.02 }] }),
+    preset: p({ exposure: -0.05, contrast: 0.97, saturation: 0.84, temperature: 0.62, tint: 0.07, fade: 0.2, grain: 0.12, grainSize: 1.3, vignette: 0.24,
+      shadows: [0.035, 0.018, -0.018], highlights: [0.045, 0.025, -0.04],
+      hsl: [{ hue: 205, width: 60, sat: 0.3, shift: -10 }, { hue: 115, width: 55, sat: 0.55, shift: -45 }, { hue: 30, width: 35, sat: 1.1, lum: -0.03 }] }),
   },
   {
     id: "portra160", name: "Portra 160", tagline: "奶油肤色 · 柔和低反差", category: "film", icon: filmPortra, pro: true, flashTone: "warm",
@@ -166,7 +168,7 @@ export const CAMERAS: Camera[] = [
     preset: p({ exposure: 0.1, contrast: 1.04, saturation: 1.12, temperature: 0.28, tint: 0.02, fade: 0.05, grain: 0.03, vignette: 0.12,
       shadows: [0.0, 0.01, 0.02], highlights: [0.04, 0.025, -0.01],
       hsl: [{ hue: 50, width: 40, sat: 1.2 }, { hue: 190, width: 45, sat: 1.12, shift: -6 }, { hue: 100, width: 40, sat: 1.1, shift: -10 }],
-      bloom: { amount: 0.55, threshold: 0.55, radius: 0.035, tint: [1.0, 0.86, 0.62] } }),
+      bloom: { amount: 0.75, threshold: 0.5, radius: 0.035, tint: [1.0, 0.85, 0.6] } }),
   },
   {
     id: "pinkccd", name: "粉调 CCD", tagline: "元气粉 · 少女感", category: "ccd", icon: ccdCandy, pro: false, flashTone: "cool",

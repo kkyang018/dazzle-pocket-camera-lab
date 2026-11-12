@@ -57,7 +57,11 @@ function DarkroomPage() {
   const [adj, setAdj] = useState<Adjust>({ ev: 0, temp: 0, tint: 0 });
   const [look, setLookId] = useState<string | null>(null);
   const [pro, setPro] = useState({ grain: 0, fade: 0, sharpen: 0 });
-  const [crop, setCrop] = useState({ x: 0.5, y: 0.5 });
+  // 拍立得取景：x/y 位置 + z 放大倍数（双指 / 滚轮）
+  const [crop, setCrop] = useState({ x: 0.5, y: 0.5, z: 1 });
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<{ dist: number; z: number } | null>(null);
+  const MAX_CROP_ZOOM = 3;
   const [panel, setPanel] = useState<"basic" | "pro">("basic");
   const [original, setOriginal] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
@@ -76,6 +80,17 @@ function DarkroomPage() {
   const moved = useRef(false);
   // 相纸区域尺寸变化时重新适配；只在相纸区域出现（有照片和相机）时绑定一次
   const ready = !!photo && !!camera;
+  // 电脑上：拍立得待显影时，滚轮缩放取景
+  useEffect(() => {
+    const el = paperRef.current;
+    if (!el || camera?.category !== "instant" || phase !== "idle") return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      setCrop((c) => ({ ...c, z: Math.min(3, Math.max(1, c.z * Math.exp(-e.deltaY * 0.0015))) }));
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [ready, camera?.category, phase]);
   useEffect(() => {
     const el = paperRef.current;
     if (!el) return;
@@ -99,6 +114,7 @@ function DarkroomPage() {
       grain: p.grain + pro.grain * 0.25,
       fade: Math.min(0.9, p.fade + pro.fade * 0.5),
       sharpen: pro.sharpen,
+      cropZoom: crop.z,
       cropX: crop.x,
       cropY: crop.y,
     };
@@ -166,14 +182,31 @@ function DarkroomPage() {
       setSavingNow(false);
     }
   };
+  const canZoom = isInstant && phase === "idle";
   const onPaperDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (phase === "developing") return;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* 个别浏览器不支持，不影响手势 */ }
+    // 第二根手指放下：开始双指缩放，不再拖动
+    if (pointers.current.size === 2 && canZoom) {
+      const [a, b] = [...pointers.current.values()];
+      pinch.current = { dist: Math.hypot(a!.x - b!.x, a!.y - b!.y) || 1, z: crop.z };
+      dragStart.current = null;
+      moved.current = true;
+      return;
+    }
     moved.current = false;
-    e.currentTarget.setPointerCapture(e.pointerId);
     const r = e.currentTarget.getBoundingClientRect();
     dragStart.current = { x: e.clientX, y: e.clientY, cx: crop.x, cy: crop.y, w: r.width, h: r.height, mx: r.left + r.width / 2, my: r.top + r.height / 2 };
   };
   const onPaperMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (pointers.current.has(e.pointerId)) pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch.current && pointers.current.size >= 2) {
+      const [a, b] = [...pointers.current.values()];
+      const z = Math.min(MAX_CROP_ZOOM, Math.max(1, (pinch.current.z * Math.hypot(a!.x - b!.x, a!.y - b!.y)) / pinch.current.dist));
+      setCrop((c) => ({ ...c, z }));
+      return;
+    }
     const s = dragStart.current;
     if (!s) return;
     const dx = e.clientX - s.x, dy = e.clientY - s.y;
@@ -186,10 +219,17 @@ function DarkroomPage() {
       setOverTray(!!t && e.clientX > t.left - 20 && e.clientX < t.right + 20 && e.clientY > t.top - 20 && e.clientY < t.bottom + 20);
     } else {
       const c = (v: number) => Math.min(1, Math.max(0, v));
-      setCrop({ x: c(s.cx - (dx / s.w) * 1.6), y: c(s.cy - (dy / s.h) * 1.6) });
+      setCrop((cur) => ({ ...cur, x: c(s.cx - (dx / s.w) * 1.6), y: c(s.cy - (dy / s.h) * 1.6) }));
     }
   };
-  const onPaperUp = () => {
+  const onPaperUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    pointers.current.delete(e.pointerId);
+    if (pinch.current) {
+      // 双指结束：等所有手指离开后再允许拖动 / 点开
+      if (pointers.current.size === 0) pinch.current = null;
+      dragStart.current = null;
+      return;
+    }
     const s = dragStart.current;
     dragStart.current = null;
     if (s && !moved.current && canvasRef.current) {
@@ -254,7 +294,7 @@ function DarkroomPage() {
         </button>
       </div>
     );
-  const tip = developing ? "点一下照片跳过" : phase === "done" ? "拖进印样台做成品" : isInstant ? "拖动调整裁剪 · 点照片看细节" : "点照片看细节 · 调好后显影";
+  const tip = developing ? "点一下照片跳过" : phase === "done" ? "拖进印样台做成品" : isInstant ? "拖动、双指缩放取景 · 点照片看细节" : "点照片看细节 · 调好后显影";
   const devRow = (
     <div className="relative z-10 flex shrink-0 items-center gap-2 py-2">
       {devButton}
