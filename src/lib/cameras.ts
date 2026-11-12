@@ -204,7 +204,7 @@ export const CAMERAS: Camera[] = [
     id: "dusk", name: "Dusk 70", tagline: "落日漏光 · 黑边相纸", category: "instant", icon: instantDusk, pro: true, flashTone: "warm",
     likes: { warmth: 0.75, lum: 0.4 },
     preset: p({ exposure: 0.08, contrast: 1.0, saturation: 1.1, temperature: 0.3, tint: -0.45, fade: 0.16, grain: 0.06, vignette: 0.3, shadows: [0.05, -0.01, 0.05], highlights: [0.07, 0.01, 0.02],
-      leak: { x: 0, y: 1, color: "255,70,120", strength: 0.24 }, frame: { kind: "square", color: "#1c1a1a" } }),
+      leak: { x: 0, y: 1, color: "255,70,120", strength: 0.24 }, frame: { kind: "square", color: "#0f0e0e" } }),
   },
   {
     id: "rainbow", name: "Rainbow Go", tagline: "彩虹经典 · 浓郁复古", category: "instant", icon: instantGo, pro: false, flashTone: "soft",

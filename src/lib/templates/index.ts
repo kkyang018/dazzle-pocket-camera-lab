@@ -66,7 +66,7 @@ function drawSolo(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOption
 // ── ② 半格胶片：两张竖裁并排、满版、片基色分隔条（窄、不纯黑、边缘不齐）、轻颗粒偏暖 ───
 const HALF_BASE = "#2a2420"; // 片基色：深棕灰，不是纯黑
 function drawHalf(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOptions) {
-  const gap = W * 0.03;
+  const gap = W * (47 / 1500); // 1500 宽画布上 47px，导出时等比放大
   ctx.fillStyle = HALF_BASE;
   ctx.fillRect(0, 0, W, H);
   const fw = (W - gap) / 2;
@@ -79,14 +79,14 @@ function drawHalf(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOption
   ctx.fillStyle = "rgba(255,170,90,0.22)";
   ctx.fillRect(0, 0, W, H);
   ctx.restore();
-  // 分隔条：两条边沿高度方向轻微起伏（像真实片基的曝光边缘），边缘一点点渗光
+  // 分隔条：边缘是细密的颗粒 / 小锯齿（像胶片片基的毛边），不是波浪；照片交界处不加阴影
   const r = rng(17);
-  // 边缘只留很轻的起伏：远看是直的，近看不是机器切出来的
-  const steps = 90, amp = gap * 0.035;
+  const step = Math.max(1, gap * 0.04), amp = gap * 0.02;
+  const steps = Math.ceil(H / step);
   const edge = (side: number) => Array.from({ length: steps + 1 }, (_, k) => {
-    const y = (k / steps) * H;
-    const wob = Math.sin(k * 0.12 + side * 2) * amp * 0.6 + (r() - 0.5) * amp * 0.6;
-    return [fw + side * gap + wob, y] as [number, number];
+    // 每一小段独立随机，没有大的起伏，只有很细的毛边
+    const jag = (r() - 0.5) * amp * (r() < 0.1 ? 1.5 : 1);
+    return [fw + side * gap + jag, Math.min(H, k * step)] as [number, number];
   });
   const left = edge(0), right = edge(1);
   ctx.save();
@@ -94,8 +94,6 @@ function drawHalf(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOption
   left.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
   [...right].reverse().forEach(([x, y]) => ctx.lineTo(x, y));
   ctx.closePath();
-  ctx.shadowColor = "rgba(42,36,32,0.55)";
-  ctx.shadowBlur = gap * 0.35;
   ctx.fillStyle = HALF_BASE;
   ctx.fill();
   ctx.restore();
@@ -112,7 +110,7 @@ function polaroidCard(kind: PolaroidFormat): [number, number] {
 function drawPolaroid(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOptions) {
   const card = imgs[0]!;
   const dark = o.frame === 1;
-  ctx.fillStyle = dark ? "#151413" : "#f8f6f1";
+  ctx.fillStyle = dark ? "#0f0e0e" : "#f8f6f1";
   ctx.fillRect(0, 0, W, H);
   ctx.drawImage(card, 0, 0, W, H);
   const [, iy, , ih] = innerRect(card, o.format);
@@ -137,9 +135,8 @@ function drawPolaroid(ctx: Ctx, W: number, H: number, imgs: Img[], o: TemplateOp
   };
   const hasPlace = !!o.caption.trim();
   const mid = top + bottom * 0.5;
-  // 两个章靠近一点
-  letter(stampText(o.date), hasPlace ? mid - base * 0.55 : mid, base);
-  if (hasPlace) letter(o.caption.trim().toUpperCase(), mid + base * 0.62, base * 0.82);
+  letter(stampText(o.date), hasPlace ? mid - base * 0.75 : mid, base);
+  if (hasPlace) letter(o.caption.trim().toUpperCase(), mid + base * 0.85, base * 0.82);
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
 }

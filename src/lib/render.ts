@@ -247,6 +247,10 @@ export function renderWithPreset(src: HTMLCanvasElement, p: Preset, seed = 7) {
   octx.clip();
   octx.fillStyle = p.frame.color;
   octx.fillRect(0, 0, out.width, out.height);
+  // 黑边相纸：压纹和表面高光要弱很多，不然黑底会被提成灰色
+  const fv = parseInt(p.frame.color.replace("#", ""), 16);
+  const darkPaper = ((fv >> 16) * 0.299 + ((fv >> 8) & 255) * 0.587 + (fv & 255) * 0.114) / 255 < 0.3;
+  const hiA = darkPaper ? 0.05 : 0.14, sheenA = darkPaper ? 0.05 : 0.15;
   const pr = mulberry32(seed + 7);
   const bot = out.height - sh - top;
   if (bot > side * 1.5) {
@@ -266,7 +270,7 @@ export function renderWithPreset(src: HTMLCanvasElement, p: Preset, seed = 7) {
       const jit = (pr() - 0.5) * 0.4 * unit;
       octx.strokeStyle = "rgba(70,75,80,0.075)";
       octx.beginPath(); octx.moveTo(x0 + jit, 0); octx.lineTo(x0 + jit + dir * out.height, out.height); octx.stroke();
-      octx.strokeStyle = "rgba(255,255,255,0.14)";
+      octx.strokeStyle = `rgba(255,255,255,${hiA})`;
       octx.beginPath(); octx.moveTo(x0 + jit + 0.8 * unit, 0); octx.lineTo(x0 + jit + 0.8 * unit + dir * out.height, out.height); octx.stroke();
     }
   }
@@ -274,7 +278,7 @@ export function renderWithPreset(src: HTMLCanvasElement, p: Preset, seed = 7) {
   yel.addColorStop(0, "rgba(150,140,120,0)"); yel.addColorStop(1, "rgba(150,140,120,0.07)");
   octx.fillStyle = yel; octx.fillRect(0, 0, out.width, out.height);
   const sheen = octx.createLinearGradient(0, 0, out.width, out.height);
-  sheen.addColorStop(0, "rgba(255,255,255,0.15)"); sheen.addColorStop(0.5, "rgba(255,255,255,0)"); sheen.addColorStop(1, "rgba(0,0,0,0.04)");
+  sheen.addColorStop(0, `rgba(255,255,255,${sheenA})`); sheen.addColorStop(0.5, "rgba(255,255,255,0)"); sheen.addColorStop(1, "rgba(0,0,0,0.04)");
   octx.fillStyle = sheen; octx.fillRect(0, 0, out.width, out.height);
   octx.drawImage(c, side, top);
   octx.strokeStyle = "rgba(0,0,0,0.28)";
