@@ -30,6 +30,26 @@ async function create() {
   return { seg, face };
 }
 
+/** 照片主体位置（最大那张脸的中心，0–1）；没有脸或模型加载失败时返回 null */
+export async function faceCenter(img: HTMLCanvasElement): Promise<[number, number] | null> {
+  try {
+    const { face } = await (tasks ??= create());
+    const k = Math.min(1, 512 / Math.max(img.width, img.height));
+    const c = document.createElement("canvas");
+    c.width = Math.max(1, Math.round(img.width * k));
+    c.height = Math.max(1, Math.round(img.height * k));
+    c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
+    const boxes = face.detect(c).detections.flatMap((d) => (d.boundingBox ? [d.boundingBox] : []));
+    if (!boxes.length) return null;
+    const b = boxes.reduce((a, x) => (x.width * x.height > a.width * a.height ? x : a));
+    return [(b.originX + b.width / 2) / c.width, (b.originY + b.height / 2) / c.height];
+  } catch (e) {
+    console.warn("faceCenter", e);
+    tasks = null;
+    return null;
+  }
+}
+
 /** 返回人物描边；照片里没有人（找不到脸）、或模型加载失败时返回 null */
 export async function personOutline(img: HTMLCanvasElement): Promise<Outline | null> {
   try {

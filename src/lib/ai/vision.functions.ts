@@ -1,8 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { streamText } from "ai";
 import { z } from "zod";
-import type { PuzzleAI, StickerFamily } from "@/lib/templates/ai-types";
-import { STICKER_FAMILIES } from "@/lib/templates/ai-types";
 import { ACCENT_KINDS, ANCHORS, MOTIF_KINDS, MOTIF_SIZES, THEMES, type SoloPlan } from "@/lib/solo/types";
 import { sanitizePlan } from "@/lib/solo/plan";
 
@@ -104,40 +102,5 @@ export const soloPlan = createServerFn({ method: "POST" })
     } catch (e) {
       console.error("soloPlan", e);
       return { ok: false, error: friendly(e) };
-    }
-  });
-
-// ── 模板四：选贴纸族 + 配色 + 主体位置 ─────────────────────────
-const puzzleSchema = z.object({
-  family: z.enum(STICKER_FAMILIES),
-  color: z.string(),
-  photos: z.array(z.object({ focusX: z.number(), focusY: z.number(), avoid: z.array(z.number()) })),
-});
-
-const PUZZLE_SYSTEM = `You art-direct a photo collage. The photos are placed on a motion-blurred background built from photo 1, and crayon stickers of ONE family are scattered on photo edges.
-Pick:
-- family: one sticker family that fits the mood (dot, star, heart, spiral, spark, flower, firework).
-- color: one crayon hex color with strong but tasteful contrast against the photos (warm, slightly muted; never black/white/grey).
-- photos: one entry per photo, in order. focusX/focusY (0-1) = center of the main subject, for cropping. avoid = flat list x,y,w,h (0-1 normalized to that photo) of up to 2 boxes covering faces/key subjects that stickers must not cover.`;
-
-export const puzzleStyle = createServerFn({ method: "POST" })
-  .inputValidator((d: { images: string[] }) => {
-    if (!Array.isArray(d?.images) || !d.images.length || d.images.length > 4 || !d.images.every(isDataUrl)) throw new Error("bad images");
-    return { images: d.images };
-  })
-  .handler(async ({ data }): Promise<Result<PuzzleAI>> => {
-    try {
-      const out = await run(puzzleSchema, `{"family":"dot","color":"#rrggbb","photos":[{"focusX":0.5,"focusY":0.4,"avoid":[x,y,w,h]}]}`, PUZZLE_SYSTEM, `There are ${data.images.length} photos, in order.`, data.images);
-      const photos = data.images.map((_, i) => {
-        const p = out.photos[i];
-        const avoid: [number, number, number, number][] = [];
-        for (let k = 0; p && k + 3 < p.avoid.length && avoid.length < 3; k += 4)
-          avoid.push([clamp(p.avoid[k]!, 0, 1), clamp(p.avoid[k + 1]!, 0, 1), clamp(p.avoid[k + 2]!, 0, 1), clamp(p.avoid[k + 3]!, 0, 1)]);
-        return { focus: [clamp(p?.focusX ?? 0.5, 0, 1), clamp(p?.focusY ?? 0.5, 0, 1)] as [number, number], avoid };
-      });
-      return { ok: true, data: { family: out.family as StickerFamily, color: HEX.test(out.color) ? out.color : "#E9D18B", photos } };
-    } catch (e) {
-      console.error("puzzleStyle", e);
-      return { ok: false, error: friendly(e).replace("配线", "配贴纸") };
     }
   });

@@ -1,19 +1,21 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { puzzleStyle, soloPlan } from "@/lib/ai/vision.functions";
+import { soloPlan } from "@/lib/ai/vision.functions";
 import { analyzeScene } from "@/lib/scene";
 import { averageColor, cropInner } from "@/lib/solo/draw";
 import { localPlan } from "@/lib/solo/plan";
-import { personOutline } from "@/lib/solo/segment";
+import { faceCenter, personOutline } from "@/lib/solo/segment";
 import type { SoloData } from "@/lib/solo/types";
+import { MAX_ZOOM, clampCrop, collageRects, coverGeometry, slotCrop, type Crop } from "@/lib/collage";
+import type { AlbumItem } from "@/lib/app-state";
 import { ChevronLeft, Loader2, Shuffle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AiMark, ApproxTag, ProMark } from "@/components/app/marks";
 import { useApp } from "@/lib/app-state";
 import { loadFonts } from "@/lib/templates/draw";
 import {
-  TEMPLATES, blockReason, defaultOptions, getTemplate, puzzleCrop, puzzleRects, puzzleSticker, recommendTemplate, takeCount, usable,
-  type PolaroidFormat, type PuzzleAI, type StickerFamily, type TemplateId, type TemplateOptions,
+  TEMPLATES, blockReason, defaultOptions, getTemplate, recommendTemplate, takeCount, usable,
+  type PolaroidFormat, type TemplateId, type TemplateOptions,
 } from "@/lib/templates";
 import { developed, exportSource, saveCanvas } from "@/lib/templates/sources";
 import { cn } from "@/lib/utils";
@@ -22,9 +24,9 @@ export const Route = createFileRoute("/result")({
   head: () => ({
     meta: [
       { title: "成品模板 · Dazz Lab" },
-      { name: "description", content: "把相册里的照片做成手绘单张、半格胶片、拍立得或拼图贴纸成品。" },
+      { name: "description", content: "把相册里的照片做成手绘单张、半格胶片、拍立得或拼图成品。" },
       { property: "og:title", content: "成品模板 · Dazz Lab" },
-      { property: "og:description", content: "手绘单张、半格胶片、拍立得、拼图贴纸。" },
+      { property: "og:description", content: "手绘单张、半格胶片、拍立得、拼图。" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -36,10 +38,8 @@ const EXPORT_LONG = 4000;
 const FORMATS: { id: PolaroidFormat; label: string }[] = [
   { id: "mini", label: "Mini" }, { id: "square", label: "Square" }, { id: "wide", label: "Wide" },
 ];
-const FAMILIES: { id: StickerFamily; label: string }[] = [
-  { id: "dot", label: "波点" }, { id: "star", label: "星星" }, { id: "heart", label: "爱心" }, { id: "spiral", label: "漩涡" },
-  { id: "spark", label: "火花" }, { id: "flower", label: "小花" }, { id: "firework", label: "烟花" },
-];
+/** 拍立得相机拍的照片（带相纸）：拼图里整张相纸直接放，不裁剪 */
+const isFramed = (i: AlbumItem) => i.category === "instant" && !!i.look?.frame;
 /** 发给 AI 的小图（长边 512） */
 function thumb(c: HTMLCanvasElement) {
   const s = Math.min(1, 512 / Math.max(c.width, c.height));
@@ -48,7 +48,6 @@ function thumb(c: HTMLCanvasElement) {
   t.getContext("2d")!.drawImage(c, 0, 0, t.width, t.height);
   return t.toDataURL("image/jpeg", 0.8);
 }
-const COLORS = ["#E9D18B", "#F2A38B", "#9CC7E0", "#F3E3B5"];
 
 function ResultPage() {
   const { album, selection, showHint } = useApp();
@@ -73,9 +72,11 @@ function ResultPage() {
   // 手绘单张：每组照片一份（人物描边 + 计划）；先出本地版，AI 回来后替换
   const [solo, setSolo] = useState<Record<string, SoloData>>({});
   const [soloBusy, setSoloBusy] = useState<Record<string, boolean>>({});
-  const [puzAI, setPuzAI] = useState<Record<string, PuzzleAI | "pending" | "err">>({});
+  // 拼图：每组照片的主体位置（人脸）和拍立得相纸
+  const [focus, setFocus] = useState<Record<string, ([number, number] | null)[]>>({});
+  const [framed, setFramed] = useState<Record<string, (HTMLCanvasElement | null)[]>>({});
+  const [selSlot, setSelSlot] = useState<number | null>(null);
   const callSolo = useServerFn(soloPlan);
-  const callPuzzle = useServerFn(puzzleStyle);
   const t = getTemplate(tid);
   const ok = usable(t, cats);
   const ids = items.map((i) => i.id).join(",");
@@ -122,23 +123,34 @@ function ResultPage() {
     return () => { alive = false; setSoloBusy((m) => ({ ...m, [ids]: false })); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [imgs, tid, ids]);
+  // 拼图：本机找每张照片的人脸，用于初始取景；拍立得照片另外取一份带相纸的
   useEffect(() => {
-    if (!imgs || tid !== "puzzle" || puzAI[ids] || imgs.length < 3) return;
-    setPuzAI((m) => ({ ...m, [ids]: "pending" }));
-    callPuzzle({ data: { images: imgs.slice(0, 4).map(thumb) } })
-      .then((r) => { setPuzAI((m) => ({ ...m, [ids]: r.ok ? r.data : "err" })); if (!r.ok) showHint(r.error); })
-      .catch(() => { setPuzAI((m) => ({ ...m, [ids]: "err" })); showHint("AI 配贴纸失败，先用本地效果"); });
+    if (!imgs || tid !== "collage" || focus[ids]) return;
+    let alive = true;
+    void Promise.all(imgs.map((im) => faceCenter(im))).then((f) => alive && setFocus((m) => ({ ...m, [ids]: f })));
+    return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [imgs, tid, ids]);
-  useEffect(() => { setOpts((o) => ({ ...o, pcrops: [null, null, null, null] })); }, [ids]);
-  const sState = solo[ids], pState = puzAI[ids];
-  const aiBusy = (tid === "solo" && !!soloBusy[ids]) || (tid === "puzzle" && pState === "pending");
+  useEffect(() => {
+    if (tid !== "collage" || framed[ids] || !items.some(isFramed)) return;
+    let alive = true;
+    void Promise.all(items.map((i) => (isFramed(i) ? developed(i, undefined, false) : Promise.resolve(null))))
+      .then((f) => alive && setFramed((m) => ({ ...m, [ids]: f })));
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tid, ids]);
+  useEffect(() => { setOpts((o) => ({ ...o, ccrops: [null, null, null, null] })); setSelSlot(null); }, [ids]);
+  const sState = solo[ids];
+  const aiBusy = tid === "solo" && !!soloBusy[ids];
   const full = useMemo<TemplateOptions>(() => ({
     ...opts,
     solo: sState ?? null,
     soloFrame,
-    puzzleAI: pState && typeof pState === "object" ? pState : null,
-  }), [opts, sState, pState, soloFrame]);
+    cfocus: focus[ids] ?? [null, null, null, null],
+    cframed: framed[ids] ?? [null, null, null, null],
+  }), [opts, sState, soloFrame, focus, framed, ids]);
+  const fullRef = useRef(full);
+  fullRef.current = full;
 
   const [w, h] = t.size(opts);
   useEffect(() => {
@@ -161,46 +173,106 @@ function ResultPage() {
     setTid(id);
   };
 
-  // 半格：左右拖动；拼图：拖动每张照片调整取景
+  // ── 拼图取景：在槽位里拖动平移，双指 / 滚轮 / 滑杆缩放；拍立得相纸不裁剪，不能调 ──
+  const n = takeCount(t, items.length);
+  const rects = useMemo(() => (t.id === "collage" ? collageRects(w, h, n) : []), [t.id, w, h, n]);
+  const cropOf = (i: number): Crop | null => {
+    const im = imgs?.[i], r = rects[i];
+    const f = fullRef.current;
+    return im && r ? slotCrop({ crops: f.ccrops, focus: f.cfocus, framed: f.cframed, background: null }, im, r, i) : null;
+  };
+  const setCrop = (i: number, c: Crop) => setOpts((o) => { const ccrops = [...o.ccrops]; ccrops[i] = clampCrop(c); return { ...o, ccrops }; });
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const gesture = useRef<{ slot: number; start: Crop; x: number; y: number; dist: number } | null>(null);
+  const slotAt = (e: { clientX: number; clientY: number }, el: HTMLCanvasElement) => {
+    const r = el.getBoundingClientRect(), k = r.width / w;
+    const px = (e.clientX - r.left) / k, py = (e.clientY - r.top) / k;
+    const i = rects.findIndex((q) => px >= q.x && px <= q.x + q.w && py >= q.y && py <= q.y + q.h);
+    return i >= 0 && !full.cframed[i] ? i : -1;
+  };
+  const restartGesture = () => {
+    const g = gesture.current, pts = [...pointers.current.values()];
+    if (!g || !pts.length) { gesture.current = null; return; }
+    const start = cropOf(g.slot) ?? g.start;
+    gesture.current = pts.length >= 2
+      ? { slot: g.slot, start, x: 0, y: 0, dist: Math.hypot(pts[0]!.x - pts[1]!.x, pts[0]!.y - pts[1]!.y) }
+      : { slot: g.slot, start, x: pts[0]!.x, y: pts[0]!.y, dist: 0 };
+  };
+
+  // 半格：左右拖动；拼图：见上
   const onDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
-    const k = r.width / w;
     if (t.id === "halfframe") {
       const side = e.clientX - r.left < r.width / 2 ? 0 : 1;
       drag.current = { x: e.clientX, y: e.clientY, side, start: [opts.crops[side], 0.5], rw: r.width / 2, rh: r.height };
-    } else if (t.id === "puzzle" && imgs) {
-      const px = (e.clientX - r.left) / k, py = (e.clientY - r.top) / k;
-      const rects = puzzleRects(w, h, Math.min(imgs.length, 4));
-      const i = rects.findIndex((q) => px >= q.x && px <= q.x + q.w && py >= q.y && py <= q.y + q.h);
-      if (i < 0) return;
-      drag.current = { x: e.clientX, y: e.clientY, side: i, start: puzzleCrop(full, i), rw: rects[i]!.w * k, rh: rects[i]!.h * k };
+    } else if (t.id === "collage" && imgs) {
+      if (!gesture.current) {
+        const i = slotAt(e, e.currentTarget);
+        if (i < 0) return;
+        setSelSlot(i);
+        gesture.current = { slot: i, start: cropOf(i)!, x: e.clientX, y: e.clientY, dist: 0 };
+      }
+      pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      restartGesture();
     } else return;
     e.currentTarget.setPointerCapture(e.pointerId);
   };
   const onMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (t.id === "collage") {
+      const g = gesture.current;
+      if (!g || !pointers.current.has(e.pointerId) || !imgs) return;
+      pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const pts = [...pointers.current.values()];
+      if (pts.length >= 2 && g.dist > 0) {
+        const d = Math.hypot(pts[0]!.x - pts[1]!.x, pts[0]!.y - pts[1]!.y);
+        setCrop(g.slot, { ...g.start, zoom: (g.start.zoom * d) / g.dist });
+      } else {
+        const k = e.currentTarget.getBoundingClientRect().width / w;
+        const geo = coverGeometry(imgs[g.slot]!, rects[g.slot]!, g.start);
+        const dx = (e.clientX - g.x) / k, dy = (e.clientY - g.y) / k;
+        setCrop(g.slot, { ...g.start, cx: geo.ex > 0 ? g.start.cx - dx / geo.ex : 0.5, cy: geo.ey > 0 ? g.start.cy - dy / geo.ey : 0.5 });
+      }
+      return;
+    }
     const d = drag.current;
     if (!d) return;
     const c01 = (v: number) => Math.max(0, Math.min(1, v));
-    if (t.id === "halfframe") {
-      const v = c01(d.start[0] - ((e.clientX - d.x) / d.rw) * 1.4);
-      setOpts((o) => { const crops = [...o.crops] as [number, number]; crops[d.side] = v; return { ...o, crops }; });
-    } else {
-      const v: [number, number] = [c01(d.start[0] - ((e.clientX - d.x) / d.rw) * 1.6), c01(d.start[1] - ((e.clientY - d.y) / d.rh) * 1.6)];
-      setOpts((o) => { const pcrops = [...o.pcrops]; pcrops[d.side] = v; return { ...o, pcrops }; });
-    }
+    const v = c01(d.start[0] - ((e.clientX - d.x) / d.rw) * 1.4);
+    setOpts((o) => { const crops = [...o.crops] as [number, number]; crops[d.side] = v; return { ...o, crops }; });
   };
-  const onUp = () => { drag.current = null; };
+  const onUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    drag.current = null;
+    if (t.id === "collage") { pointers.current.delete(e.pointerId); restartGesture(); }
+  };
+  // 滚轮缩放（需要非被动监听才能阻止页面滚动）
+  useEffect(() => {
+    const c = canvas.current;
+    if (!c || t.id !== "collage") return;
+    const onWheel = (e: WheelEvent) => {
+      const i = slotAt(e, c);
+      if (i < 0) return;
+      e.preventDefault();
+      setSelSlot(i);
+      const cur = cropOf(i);
+      if (cur) setCrop(i, { ...cur, zoom: cur.zoom * Math.exp(-e.deltaY * 0.0015) });
+    };
+    c.addEventListener("wheel", onWheel, { passive: false });
+    return () => c.removeEventListener("wheel", onWheel);
+  });
 
   async function save() {
     setSaving(true);
     try {
-      const n = takeCount(t, items.length);
       const srcs = await Promise.all(items.slice(0, n).map((i) => exportSource(i, bare)));
+      // 拼图里的拍立得：导出时也用原图重新渲染整张相纸
+      const cframed = t.id === "collage"
+        ? await Promise.all(items.slice(0, n).map((i) => (isFramed(i) ? exportSource(i, false) : Promise.resolve(null))))
+        : full.cframed;
       const s = EXPORT_LONG / Math.max(w, h);
       const out = document.createElement("canvas");
       out.width = Math.round(w * s);
       out.height = Math.round(h * s);
-      t.draw(out.getContext("2d")!, out.width, out.height, srcs, full);
+      t.draw(out.getContext("2d")!, out.width, out.height, srcs, { ...full, cframed });
       const r = await saveCanvas(out, `dazzlab-${t.id}-${Date.now()}.jpg`);
       if (r === "downloaded") showHint("已保存");
     } catch {
@@ -210,8 +282,7 @@ function ResultPage() {
     }
   }
 
-  const n = takeCount(t, items.length);
-  const auto = imgs && t.id === "puzzle" ? puzzleSticker(imgs, { ...full, sticker: null, stickerColor: null }) : null;
+  const selCrop = t.id === "collage" && selSlot != null && selSlot < n && !full.cframed[selSlot] ? cropOf(selSlot) : null;
   const chip = (on: boolean) => cn("rounded-full border px-3 py-1 text-[12px]", on ? "border-foreground bg-foreground text-background" : "border-border");
 
   return (
@@ -254,11 +325,11 @@ function ResultPage() {
             {ok ? (
               <div className="relative mx-auto overflow-hidden bg-muted shadow-sm" style={{ aspectRatio: `${w} / ${h}`, maxHeight: "60dvh" }}>
                 <canvas ref={canvas} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
-                  className={cn("size-full", t.id === "halfframe" && "touch-none cursor-ew-resize", t.id === "puzzle" && "touch-none cursor-grab")} aria-label={`${t.name}预览`} />
+                  className={cn("size-full", t.id === "halfframe" && "touch-none cursor-ew-resize", t.id === "collage" && "touch-none cursor-grab")} aria-label={`${t.name}预览`} />
                 {!imgs && <Loader2 className="absolute inset-0 m-auto size-6 animate-spin text-muted-foreground" />}
                 {imgs && aiBusy && (
                   <span className="absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full bg-background/80 px-2.5 py-1 font-mono text-[10px] backdrop-blur-sm">
-                    <AiMark className="size-3" />{t.id === "solo" ? "AI 看图选图案中" : "AI 看图配贴纸中"}<Loader2 className="size-3 animate-spin" />
+                    <AiMark className="size-3" />AI 看图选图案中<Loader2 className="size-3 animate-spin" />
                   </span>
                 )}
               </div>
@@ -269,7 +340,7 @@ function ResultPage() {
             )}
             <div className="mt-2 flex items-center justify-between">
               <p className="font-mono text-[10px] text-muted-foreground">
-                {t.id === "halfframe" ? "左右拖动照片调整裁切 · 竖拍效果更好" : t.id === "puzzle" ? "拖动每张照片调整取景" : t.en}
+                {t.id === "halfframe" ? "左右拖动照片调整裁切 · 竖拍效果更好" : t.id === "collage" ? "拖动照片调整取景 · 双指或滚轮缩放" : t.en}
                 {t.id === rec && " · AI 推荐"}
               </p>
               {items.some((i) => i.photo.origin === "album") && <ApproxTag />}
@@ -317,25 +388,22 @@ function ResultPage() {
                 </Field>
               </>
             )}
-            {t.id === "puzzle" && (
+            {t.id === "collage" && (
               <>
-                <Field label="贴纸（每张只用一种）">
-                  <div className="flex flex-wrap gap-2">
-                    <button type="button" onClick={() => set("sticker", null)} className={cn(chip(opts.sticker === null), "flex items-center gap-1")}><AiMark className="size-3" />自动{auto ? ` · ${FAMILIES.find((f) => f.id === auto.family)?.label}` : ""}</button>
-                    {FAMILIES.map((f) => <button key={f.id} type="button" onClick={() => set("sticker", f.id)} className={chip(opts.sticker === f.id)}>{f.label}</button>)}
-                  </div>
+                <Field label={selCrop ? `第 ${selSlot! + 1} 张 · 缩放` : "取景"}>
+                  {selCrop ? (
+                    <div className="flex items-center gap-3">
+                      <input type="range" min={1} max={MAX_ZOOM} step={0.01} value={selCrop.zoom} aria-label="缩放"
+                        onChange={(e) => setCrop(selSlot!, { ...selCrop, zoom: +e.target.value })} className="flex-1 accent-[var(--primary)]" />
+                      <span className="w-10 text-right font-mono text-[11px] tabular-nums">{selCrop.zoom.toFixed(1)}×</span>
+                    </div>
+                  ) : (
+                    <p className="text-[12px] text-muted-foreground">点一张照片后可以拖动、缩放取景{full.cframed.some(Boolean) ? "；拍立得保留整张相纸，不裁剪" : ""}</p>
+                  )}
                 </Field>
-                <Field label="颜色">
-                  <div className="flex items-center gap-2">
-                    <button type="button" onClick={() => set("stickerColor", null)} className={cn(chip(opts.stickerColor === null), "flex items-center gap-1")}>
-                      <AiMark className="size-3" />看图配色{auto && <span className="size-3 rounded-full border border-border" style={{ background: auto.color }} />}
-                    </button>
-                    {COLORS.map((c) => <button key={c} type="button" aria-label={c} onClick={() => set("stickerColor", c)}
-                      className={cn("size-6 rounded-full border-2", opts.stickerColor === c ? "border-foreground" : "border-transparent")} style={{ background: c }} />)}
-                  </div>
-                </Field>
-                <div className="flex gap-2"><button type="button" onClick={() => set("seed", opts.seed + 1)} className={cn(chip(false), "flex items-center gap-1")}><Shuffle className="size-3" />重新散布</button>
-                <button type="button" onClick={() => set("pcrops", [null, null, null, null])} className={chip(false)}>取景复位</button></div>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => { set("ccrops", [null, null, null, null]); setSelSlot(null); }} className={chip(false)}>取景复位</button>
+                </div>
               </>
             )}
           </section>
