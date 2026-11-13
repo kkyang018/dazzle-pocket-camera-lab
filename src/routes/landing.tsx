@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { CAMERAS } from "@/lib/cameras";
+import { playEject } from "@/lib/sound";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/landing")({
@@ -162,6 +163,22 @@ function LandingPage() {
 /* ── ① 封面：顶部一个出片口（和 app 暗房一样），相纸吐出来、显影，循环；文字盖在上面 ── */
 function Hero() {
   const paperW = "clamp(300px, 36vw, 500px)";
+  const card = useRef<HTMLDivElement>(null);
+  // 首次点击/滚动/按键后，在下一次相纸吐出时播一次吐纸声（浏览器不允许无手势自动播放）
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const evs = ["pointerdown", "scroll", "keydown", "touchstart", "wheel"] as const;
+    const unlock = () => {
+      evs.forEach((e) => window.removeEventListener(e, unlock));
+      const anim = card.current?.getAnimations().find((a) => (a as CSSAnimation).animationName === "lp-eject");
+      if (!anim || document.querySelector('[data-quiet="true"]')) return;
+      const CYCLE = 12000, START = CYCLE * 0.05;
+      const t = Number(anim.currentTime ?? 0) % CYCLE;
+      timer = setTimeout(playEject, (START - t + CYCLE) % CYCLE || CYCLE);
+    };
+    evs.forEach((e) => window.addEventListener(e, unlock, { passive: true }));
+    return () => { evs.forEach((e) => window.removeEventListener(e, unlock)); clearTimeout(timer); };
+  }, []);
   return (
     <section id="top" className="theme-darkroom relative overflow-hidden" style={{ "--paper-w": paperW } as CSSProperties}>
       <div aria-hidden className="lp-safelight pointer-events-none absolute top-[10%] left-1/2 size-[min(1000px,150vw)] -translate-x-1/2 rounded-full" />
@@ -172,7 +189,7 @@ function Hero() {
           <div className="mx-auto h-[4px] w-[86%] translate-y-[6px] rounded-full bg-background shadow-[inset_0_1px_2px_rgb(0_0_0/0.9)]" />
         </div>
         <div className="mx-auto w-[var(--paper-w)] overflow-hidden pb-10 brightness-[0.5] saturate-[0.9]">
-          <div className="lp-eject-card lp-paper-tex relative rounded-[4px] p-[6%] pb-[22%] shadow-[0_28px_50px_-16px_rgb(0_0_0/0.9)]">
+          <div ref={card} className="lp-eject-card lp-paper-tex relative rounded-[4px] p-[6%] pb-[22%] shadow-[0_28px_50px_-16px_rgb(0_0_0/0.9)]">
             <div className="relative aspect-square overflow-hidden bg-black">
               <img src={A("hero-photo.jpg")} alt="" className="size-full object-cover" />
               <div className="lp-veil absolute inset-0" />
