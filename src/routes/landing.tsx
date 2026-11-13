@@ -164,30 +164,32 @@ function LandingPage() {
 function Hero() {
   const paperW = "clamp(300px, 36vw, 500px)";
   const card = useRef<HTMLDivElement>(null);
-  // 首次点击/滚动/按键后，在下一次相纸吐出时播一次吐纸声（浏览器不允许无手势自动播放）
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const evs = ["pointerdown", "scroll", "keydown", "touchstart", "wheel"] as const;
-    const unlock = () => {
-      evs.forEach((e) => window.removeEventListener(e, unlock));
-      const anim = card.current?.getAnimations().find((a) => (a as CSSAnimation).animationName === "lp-eject");
-      if (!anim || document.querySelector('[data-quiet="true"]')) return;
-      const CYCLE = 12000, START = CYCLE * 0.05;
-      const t = Number(anim.currentTime ?? 0) % CYCLE;
-      timer = setTimeout(playEject, (START - t + CYCLE) % CYCLE || CYCLE);
-    };
-    evs.forEach((e) => window.addEventListener(e, unlock, { passive: true }));
-    return () => { evs.forEach((e) => window.removeEventListener(e, unlock)); clearTimeout(timer); };
-  }, []);
+  // 点出片口：重新吐一张并播放吐纸声（安静模式下不响）
+  const replay = () => {
+    const el = card.current;
+    if (!el) return;
+    el.classList.remove("lp-eject-card");
+    void el.offsetWidth;
+    el.classList.add("lp-eject-card");
+    if (!document.querySelector('[data-quiet="true"]')) playEject();
+  };
   return (
     <section id="top" className="theme-darkroom relative overflow-hidden" style={{ "--paper-w": paperW } as CSSProperties}>
       <div aria-hidden className="lp-safelight pointer-events-none absolute top-[10%] left-1/2 size-[min(1000px,150vw)] -translate-x-1/2 rounded-full" />
 
-      {/* 出片口 + 相纸（背景层，调暗） */}
-      <div aria-hidden className="pointer-events-none absolute top-[64px] left-1/2 w-[calc(var(--paper-w)+56px)] -translate-x-1/2">
+      {/* 出片口 + 相纸（背景层，调暗）；点一下重新吐一张，带音效 */}
+      <button
+        type="button"
+        onClick={replay}
+        aria-label="再吐一张相纸"
+        className="group absolute top-[64px] left-1/2 w-[calc(var(--paper-w)+56px)] -translate-x-1/2 cursor-pointer"
+      >
         <div className="relative z-10 h-[18px] rounded-b-lg bg-gradient-to-b from-background to-surface shadow-[0_8px_14px_-4px_rgb(0_0_0/0.85)]">
           <div className="mx-auto h-[4px] w-[86%] translate-y-[6px] rounded-full bg-background shadow-[inset_0_1px_2px_rgb(0_0_0/0.9)]" />
         </div>
+        <span className="pointer-events-none absolute -top-1 right-2 z-20 rounded-full border border-primary/50 bg-black/60 px-2.5 py-1 font-mono text-[10px] tracking-[0.14em] text-primary opacity-70 transition-opacity group-hover:opacity-100">
+          EJECT · 再吐一张
+        </span>
         <div className="mx-auto w-[var(--paper-w)] overflow-hidden pb-10 brightness-[0.5] saturate-[0.9]">
           <div ref={card} className="lp-eject-card lp-paper-tex relative rounded-[4px] p-[6%] pb-[22%] shadow-[0_28px_50px_-16px_rgb(0_0_0/0.9)]">
             <div className="relative aspect-square overflow-hidden bg-black">
@@ -199,14 +201,14 @@ function Hero() {
             </div>
           </div>
         </div>
-      </div>
+      </button>
 
       {/* 蒙版：中间压暗，保证文字看得清；底部融进下一屏 */}
       <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_62%_46%_at_50%_54%,oklch(0.12_0.008_40/0.72),oklch(0.12_0.008_40/0.25)_70%,transparent)]" />
       <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-b from-transparent to-[oklch(0.16_0.008_40)]" />
 
-      {/* 文字：居中，盖在出片口和相纸上面 */}
-      <div className="relative mx-auto flex min-h-[100svh] max-w-4xl flex-col items-center justify-center px-6 pt-44 pb-8 text-center">
+      {/* 文字：居中，盖在出片口和相纸上面（不挡出片口点击） */}
+      <div className="pointer-events-none relative mx-auto flex min-h-[100svh] max-w-4xl flex-col items-center justify-center px-6 pt-44 pb-8 text-center [&_a,&_button]:pointer-events-auto">
         <h1 data-reveal style={{ "--d": "0.1s" } as CSSProperties} className="font-serif text-[clamp(46px,6.8vw,100px)] leading-[0.95] font-black tracking-tight [text-shadow:0_4px_30px_rgb(0_0_0/0.7)]">
           <span className="whitespace-nowrap">Not a filter.</span>
           <br />
