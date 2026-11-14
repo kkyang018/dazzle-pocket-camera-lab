@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Aperture, ImagePlus, Images, Loader2 } from "lucide-react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { Aperture, ChevronRight, ImagePlus, Images, Loader2 } from "lucide-react";
 import { useApp } from "@/lib/app-state";
+import { cameraName, getCamera } from "@/lib/cameras";
 import { useT } from "@/lib/i18n";
 import { photoFromFile, photoFromSample } from "@/lib/photo";
 import { cn } from "@/lib/utils";
@@ -23,8 +24,11 @@ export const Route = createFileRoute("/")({
 });
 
 function LabPage() {
-  const { setPhoto, setRewashId, album, lang } = useApp();
+  const { setPhoto, setRewashId, album, lang, photo, cameraId, lastPath } = useApp();
   const t = useT();
+  // 手上还有一张没冲完的照片：给一个"继续"入口，回到上次停的那一步（选相机 / 暗房）
+  const current = getCamera(cameraId);
+  const resumeTo = lastPath.step === "/darkroom" && current ? "/darkroom" : "/cameras";
   // 新手引导：印样台里还没有自己的照片时显示，也可以手动关掉（只在本次打开有效）
   const [guideClosed, setGuideClosed] = useState(false);
   const showGuide = !guideClosed && !album.some((a) => a.id > 0);
@@ -88,6 +92,23 @@ function LabPage() {
       </header>
 
       <div className="flex flex-1 flex-col justify-center py-8">
+        {photo && (
+          <Link
+            to={resumeTo}
+            className="animate-rise mb-4 flex items-center gap-3 rounded-2xl border border-hairline bg-surface/70 p-2.5 pr-3 transition-transform active:scale-[0.98]"
+          >
+            <img src={photo.src} alt="" className="size-12 shrink-0 rounded-lg object-cover ring-1 ring-hairline" />
+            <span className="min-w-0 flex-1">
+              <span className="block font-serif text-[15px] font-bold">{t("继续冲洗这张", "Continue developing")}</span>
+              <span className="block truncate font-mono text-[10px] tracking-wide text-muted-foreground">
+                {resumeTo === "/darkroom" && current
+                  ? t(`回到暗房 · ${cameraName(current, lang)}`, `Back to the darkroom · ${cameraName(current, lang)}`)
+                  : t("回到选相机", "Back to cameras")}
+              </span>
+            </span>
+            <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+          </Link>
+        )}
         <input
           ref={inputRef}
           type="file"

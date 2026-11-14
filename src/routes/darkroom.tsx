@@ -52,7 +52,7 @@ export const Route = createFileRoute("/darkroom")({
 });
 
 function DarkroomPage() {
-  const { photo, cameraId, quietMode, setLook, showHint, addToAlbum, updateAlbumItem, setSelection, edits, saveEdit, rewashId, setRewashId, lang } = useApp();
+  const { photo, cameraId, quietMode, setLook, showHint, album, addToAlbum, updateAlbumItem, setSelection, edits, saveEdit, rewashId, setRewashId, devPrints, setDevPrint, notePath, lang } = useApp();
   const t = useT();
   const navigate = useNavigate();
   const camera = getCamera(cameraId);
@@ -151,11 +151,31 @@ function DarkroomPage() {
     if (phase !== "idle") setPhase("idle");
   };
 
+  /** 显影完成就收进印样台：同一张照片 × 同一台相机再显影时更新那一张，不重复加；
+   *  从印样台回来重新冲洗的，更新原来那张。返回这张在印样台里的 id。 */
+  const storePrint = () => {
+    if (!photo || !camera || !preset || !key) return null;
+    notePath("/album"); // 底部点印样台时先看到这张新冲的，而不是之前做到一半的成品页
+    const info = { look: preset, cameraName: camera.name, category: camera.category, cameraId: camera.id, edit: { adj, lookId: look, pro, crop } };
+    const known = rewashId ?? devPrints[key];
+    if (known != null && album.some((a) => a.id === known)) {
+      updateAlbumItem(known, info);
+      if (rewashId != null) setRewashId(null);
+      setDevPrint(key, known);
+      showHint(t("已更新印样台里的这张", "Updated in Prints"));
+      return known;
+    }
+    const id = addToAlbum({ photo, ...info });
+    setDevPrint(key, id);
+    showHint(t("已收进印样台", "Saved to Prints"));
+    return id;
+  };
   const finish = () => {
     timers.current.forEach(clearTimeout);
     timers.current = [];
     setPhase("done");
     setStage("play");
+    storePrint();
   };
   const develop = () => {
     if (!camera) return;
@@ -167,22 +187,12 @@ function DarkroomPage() {
     timers.current.push(setTimeout(finish, total));
     if (camera.category === "instant") playEject();
   };
+  // 拖进印样台：显影完已经收好了，这里只选中它再过去
   const goResult = () => {
     setLook(preset);
-    if (photo && camera) {
-      const edit = { adj, lookId: look, pro, crop };
-      const info = { look: preset, cameraName: camera.name, category: camera.category, cameraId: camera.id, edit };
-      // 从印样台回来重新冲洗的：更新原来那张；否则新加一张
-      if (rewashId != null) {
-        updateAlbumItem(rewashId, info);
-        setSelection([rewashId]);
-        setRewashId(null);
-        showHint(t("已更新印样台里的这张", "Updated this print"));
-      } else {
-        setSelection([addToAlbum({ photo, ...info })]);
-        showHint(t("已收进印样台", "Added to Prints"));
-      }
-    }
+    const stored = key != null ? devPrints[key] : undefined;
+    const id = stored != null && album.some((a) => a.id === stored) ? stored : storePrint();
+    if (id != null) setSelection([id]);
     navigate({ to: "/album" });
   };
 
@@ -313,7 +323,7 @@ function DarkroomPage() {
         </button>
       </div>
     );
-  const tip = developing ? t("点一下照片跳过", "Tap the photo to skip") : phase === "done" ? t("拖进印样台做成品", "Drag into Prints") : isInstant ? t("拖动、双指缩放取景 · 点照片看细节", "Drag or pinch to frame") : t("点照片看细节 · 调好后显影", "Tap to zoom · then develop");
+  const tip = developing ? t("点一下照片跳过", "Tap the photo to skip") : phase === "done" ? t("已收进印样台 · 拖过去做成品", "Saved to Prints · drag in to make one") : isInstant ? t("拖动、双指缩放取景 · 点照片看细节", "Drag or pinch to frame") : t("点照片看细节 · 调好后显影", "Tap to zoom · then develop");
   const devRow = (
     <div className="relative z-10 flex shrink-0 items-center gap-2 py-2">
       {devButton}

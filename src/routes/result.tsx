@@ -48,21 +48,28 @@ function thumb(c: HTMLCanvasElement) {
 }
 
 function ResultPage() {
-  const { album, selection, showHint, lang } = useApp();
+  const { album, selection, showHint, lang, printDrafts, savePrintDraft } = useApp();
   const tr = useT();
   const tname = (x: { name: string; en: string }) => tr(x.name, x.en);
   const items = useMemo(() => selection.map((id) => album.find((a) => a.id === id)).filter((a) => !!a), [album, selection]);
+  // 这组照片上次在成品页的模板和设置：切到别的标签再回来时接着做，不从头开始
+  const draft = printDrafts[items.map((i) => i.id).join(",")] as
+    | { tid: TemplateId; opts: TemplateOptions; solo?: SoloData }
+    | undefined;
+  const restored = useRef(!!draft);
   const cats = useMemo(() => items.map((i) => i.category), [items]);
   const lead = items[0] ?? null;
   // 推荐的模板用不了（比如混进了拍立得照片）时不标"AI 推荐"，默认打开第一个能用的
   const recRaw = recommendTemplate(items.length, lead?.category ?? null);
   const recOk = usable(getTemplate(recRaw), cats);
   const rec: TemplateId | null = recOk ? recRaw : null;
-  const [tid, setTid] = useState<TemplateId>(() => rec ?? TEMPLATES.find((x) => usable(x, cats))?.id ?? recRaw);
-  const [opts, setOpts] = useState<TemplateOptions>(() => defaultOptions(lead?.place ?? null));
+  const [tid, setTid] = useState<TemplateId>(() => draft?.tid ?? rec ?? TEMPLATES.find((x) => usable(x, cats))?.id ?? recRaw);
+  const [opts, setOpts] = useState<TemplateOptions>(() => draft?.opts ?? defaultOptions(lead?.place ?? null));
   // 拍立得：相纸尺寸和边框跟随拍摄的相机，成品台只盖日期和地点两个章
   const paper = lead?.look?.frame;
+  const skipPaper = useRef(restored.current); // 接着做的：保留用户上次选的相纸，不重设
   useEffect(() => {
+    if (skipPaper.current) { skipPaper.current = false; return; }
     if (!paper) return;
     const dark = (() => { const m = /^#?(\w\w)(\w\w)(\w\w)/.exec(paper.color); return m ? parseInt(m[1]!, 16) + parseInt(m[2]!, 16) + parseInt(m[3]!, 16) < 300 : false; })();
     setOpts((o) => ({ ...o, format: paper.kind, frame: dark ? 1 : 0 }));
@@ -73,7 +80,7 @@ function ResultPage() {
   const canvas = useRef<HTMLCanvasElement>(null);
   const drag = useRef<{ x: number; y: number; side: number; start: [number, number]; rw: number; rh: number } | null>(null);
   // 手绘单张：每组照片一份（人物描边 + 计划）；先出本地版，AI 回来后替换
-  const [solo, setSolo] = useState<Record<string, SoloData>>({});
+  const [solo, setSolo] = useState<Record<string, SoloData>>(() => (draft?.solo ? { [items.map((i) => i.id).join(",")]: draft.solo } : {}));
   const [soloBusy, setSoloBusy] = useState<Record<string, boolean>>({});
   // 拼图：每组照片的主体位置（人脸），用于初始取景
   const [focus, setFocus] = useState<Record<string, ({ center: [number, number]; area: number } | null)[]>>({});
@@ -134,8 +141,18 @@ function ResultPage() {
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [imgs, tid, ids]);
-  useEffect(() => { setOpts((o) => ({ ...o, ccrops: [null, null, null, null] })); setSelSlot(null); }, [ids]);
+  // 换了一组照片才清空拼图取景；第一次打开（含接着做）保留
+  const firstIds = useRef(ids);
+  useEffect(() => {
+    if (ids === firstIds.current) return;
+    setOpts((o) => ({ ...o, ccrops: [null, null, null, null] }));
+    setSelSlot(null);
+  }, [ids]);
   const sState = solo[ids];
+  useEffect(() => {
+    if (items.length) savePrintDraft(ids, { tid, opts, solo: sState });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ids, tid, opts, sState, savePrintDraft]);
   const aiBusy = tid === "solo" && !!soloBusy[ids];
   const full = useMemo<TemplateOptions>(() => ({
     ...opts,

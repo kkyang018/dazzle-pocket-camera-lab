@@ -51,7 +51,20 @@ type AppState = {
   /** 相册里选中、要做成成品的照片 id（按选择顺序） */
   selection: number[];
   setSelection: (ids: number[]) => void;
+  /** 每个标签上次停在哪一步：底部标签栏点回来时回到这里，不让做到一半的进度"消失" */
+  /** lab / album：每个标签上次停的页面；step：选照片之后走到的最后一步（首页"继续"卡片用） */
+  lastPath: { lab: "/" | "/cameras" | "/darkroom"; album: "/album" | "/result"; step: "/cameras" | "/darkroom" };
+  notePath: (pathname: string) => void;
+  /** 暗房：这张照片 × 这台相机显影后自动收进印样台的那张（再显影时更新它，不重复加） */
+  devPrints: Record<string, number>;
+  setDevPrint: (key: string, id: number) => void;
+  /** 成品页：每组照片上次的模板和设置，离开再回来时恢复（只在内存里） */
+  printDrafts: Record<string, PrintDraft>;
+  savePrintDraft: (ids: string, draft: PrintDraft) => void;
 };
+
+/** 成品页草稿：模板 + 选项（类型留宽，具体由成品页定义） */
+export type PrintDraft = { tid: string; opts: unknown; solo?: unknown };
 
 export type AlbumItem = {
   id: number;
@@ -104,6 +117,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [selection, setSelection] = useState<number[]>([]);
   const [edits, setEdits] = useState<Record<string, DarkroomEdit>>({});
   const [rewashId, setRewashId] = useState<number | null>(null);
+  const [lastPath, setLastPath] = useState<AppState["lastPath"]>({ lab: "/", album: "/album", step: "/cameras" });
+  const [devPrints, setDevPrints] = useState<Record<string, number>>({});
+  const [printDrafts, setPrintDrafts] = useState<Record<string, PrintDraft>>({});
+  const notePath = useCallback((p: string) => {
+    const lab = p === "/" ? "/" : p.startsWith("/cameras") ? "/cameras" : p.startsWith("/darkroom") ? "/darkroom" : null;
+    const album = p.startsWith("/album") ? "/album" : p.startsWith("/result") ? "/result" : null;
+    if (lab) setLastPath((s) => (s.lab === lab ? s : { ...s, lab, step: lab === "/" ? s.step : lab }));
+    else if (album) setLastPath((s) => (s.album === album ? s : { ...s, album }));
+  }, []);
+  const setDevPrint = useCallback((key: string, id: number) => setDevPrints((m) => ({ ...m, [key]: id })), []);
+  const savePrintDraft = useCallback((ids: string, draft: PrintDraft) => setPrintDrafts((m) => ({ ...m, [ids]: draft })), []);
   const albumRef = useRef<AlbumItem[]>([]);
   albumRef.current = album;
   const pendingDelete = useRef(new Map<number, { item: AlbumItem; timer: ReturnType<typeof setTimeout> }>());
@@ -120,6 +144,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setPhoto = useCallback((p: Photo | null) => {
+    // 换了照片，"继续"从选相机开始
+    if (p?.src !== photoRef.current?.src) setLastPath((s) => ({ ...s, step: "/cameras" }));
     // 已归档到相册的照片还在用，不能释放
     if (photoRef.current && photoRef.current.src !== p?.src && !albumSrcs.current.has(photoRef.current.src)) release(photoRef.current);
     photoRef.current = p;
@@ -264,6 +290,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setRewashId,
         selection,
         setSelection,
+        lastPath,
+        notePath,
+        devPrints,
+        setDevPrint,
+        printDrafts,
+        savePrintDraft,
       }}>
       {children}
     </AppContext.Provider>
