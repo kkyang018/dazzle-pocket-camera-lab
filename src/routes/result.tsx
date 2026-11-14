@@ -54,7 +54,7 @@ function ResultPage() {
   const items = useMemo(() => selection.map((id) => album.find((a) => a.id === id)).filter((a) => !!a), [album, selection]);
   // 这组照片上次在成品页的模板和设置：切到别的标签再回来时接着做，不从头开始
   const draft = printDrafts[items.map((i) => i.id).join(",")] as
-    | { tid: TemplateId; opts: TemplateOptions; solo?: SoloData }
+    | { tid: TemplateId; opts: TemplateOptions }
     | undefined;
   const restored = useRef(!!draft);
   const cats = useMemo(() => items.map((i) => i.category), [items]);
@@ -80,7 +80,7 @@ function ResultPage() {
   const canvas = useRef<HTMLCanvasElement>(null);
   const drag = useRef<{ x: number; y: number; side: number; start: [number, number]; rw: number; rh: number } | null>(null);
   // 手绘单张：每组照片一份（人物描边 + 计划）；先出本地版，AI 回来后替换
-  const [solo, setSolo] = useState<Record<string, SoloData>>(() => (draft?.solo ? { [items.map((i) => i.id).join(",")]: draft.solo } : {}));
+  const [solo, setSolo] = useState<Record<string, SoloData>>({});
   const [soloBusy, setSoloBusy] = useState<Record<string, boolean>>({});
   // 拼图：每组照片的主体位置（人脸），用于初始取景
   const [focus, setFocus] = useState<Record<string, ({ center: [number, number]; area: number } | null)[]>>({});
@@ -150,9 +150,9 @@ function ResultPage() {
   }, [ids]);
   const sState = solo[ids];
   useEffect(() => {
-    if (items.length) savePrintDraft(ids, { tid, opts, solo: sState });
+    if (items.length) savePrintDraft(ids, { tid, opts });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ids, tid, opts, sState, savePrintDraft]);
+  }, [ids, tid, opts, savePrintDraft]);
   const aiBusy = tid === "solo" && !!soloBusy[ids];
   const full = useMemo<TemplateOptions>(() => ({
     ...opts,

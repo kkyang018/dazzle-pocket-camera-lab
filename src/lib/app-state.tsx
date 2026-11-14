@@ -64,7 +64,7 @@ type AppState = {
 };
 
 /** 成品页草稿：模板 + 选项（类型留宽，具体由成品页定义） */
-export type PrintDraft = { tid: string; opts: unknown; solo?: unknown };
+export type PrintDraft = { tid: string; opts: unknown };
 
 export type AlbumItem = {
   id: number;
