@@ -549,13 +549,17 @@ function FinalCta() {
     <section className="theme-darkroom lp-dark relative overflow-hidden">
       <div aria-hidden className="lp-safelight pointer-events-none absolute -bottom-[260px] left-1/2 size-[760px] -translate-x-1/2 rounded-full" />
       <div className="relative mx-auto max-w-4xl px-6 pt-16 pb-28 text-center md:pt-24 md:pb-36">
-        <h2 data-reveal className="font-serif text-[clamp(40px,6.4vw,84px)] leading-[0.98] font-black tracking-tight">
-          Your darkroom
+        {/* 结尾用 VP 原句，和首屏的短版「Not a filter. A darkroom.」前后呼应 */}
+        <h2 data-reveal className="font-serif text-[clamp(34px,5.2vw,68px)] leading-[1.02] font-black tracking-tight">
+          <span className="whitespace-nowrap">Some moments</span> <span className="whitespace-nowrap">deserve</span>
           <br />
-          is ready.
+          <span className="text-primary">
+            <span className="whitespace-nowrap">a darkroom,</span> <span className="whitespace-nowrap">not a filter.</span>
+          </span>
         </h2>
-        <p data-reveal style={{ "--d": "0.1s" } as CSSProperties} className="mt-5 font-serif text-lg tracking-[0.32em] text-[oklch(0.8_0.03_60)]">
-          不是滤镜，是暗房。
+        <p data-reveal style={{ "--d": "0.1s" } as CSSProperties} className="mt-5 font-serif text-lg tracking-[0.12em] text-[oklch(0.8_0.03_60)]">
+          <span className="inline-block">有些瞬间，值得一间暗房，</span>
+          <span className="inline-block">而不只是一层滤镜。</span>
         </p>
         <div data-reveal style={{ "--d": "0.2s" } as CSSProperties} className="mt-10">
           <TryButton />
